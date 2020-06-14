@@ -54,77 +54,130 @@ def select_data(tickers, years):
                    "shares of insiders", "dividend/share", "preferred stock",
                    "debt"]
         dict_data_year = []
+        all_new_columns = []
         _10k_fpaths = [os.path.join(ticker, fname)
                        for fname in os.listdir(ticker)]
         for _10k_fpath in _10k_fpaths:
             print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
-            dict_data = {}
 
-            df_10k = pd.read_excel(_10k_fpath, sheet_name=None)
+            df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
+            df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
 
-            # Get Balance Sheet data
-            # balance_sheet_infos = ["total assets", "total liabilities",
-            #                        "cash and cash equivalents", "total equity",
-            #                        "goodwill", "intangible assets", "debt"]
-            balance_sheet_infos = ["total assets", "total liabilities",
-                                   "cash and cash equivalents", "equity",
-                                   "goodwill", "intangible assets", "debt"]
+            # TODO
+            # Find if that split makes sense for other tickers
+            # May need to pull first column instead of sheet title
 
-            r = re.compile(".*balance sheet")
-            keys_couples = [(key, key.lower()) for key in df_10k.keys()]
-            match_back = dict(zip([keys_couple[
-                1] for keys_couple in keys_couples], [keys_couple[
-                    0] for keys_couple in keys_couples]))
-            output = list(filter(r.match, [keys_couple[
-                1] for keys_couple in keys_couples]))
-            if output:
-                # TODO: Find a correct way to select the sheet
-                balance_sheet_df = df_10k[match_back[output[0]]]
-                print(balance_sheet_df)
+            # TODO
+            # Find regex per word
 
-                r = re.compile(".*" + year)
-                year_column_list = list(
-                    filter(r.match, balance_sheet_df.columns))
-                assert len(year_column_list) == 1
-                year_column = year_column_list[0]
+            # TODO
+            # Make sure the currency is correct
+            data_per_sheet = {
+                "balance sheet": ["total assets", "total liabilities",
+                                  "cash and cash equivalents", "equity",
+                                  "goodwill", "intangible assets", "debt"],
+                "statements of oper": ["operating income", "weighted-average diluted", "net income"],
+                "statements of cash": ["cash operating activities"]
+            }
+            all_dict_data = {}
+            for sheet, data_list in data_per_sheet.items():
 
-                # Get multiplier
-                # TODO: Check other CSVs to make sure that works
-                title = balance_sheet_df.columns[0]
-                if "million" in title.lower():
-                    multiplier = 1000000
-                elif "thousands" in title.lower():
-                    multiplier = 1000
-
-                balance_sheet_df[title] = balance_sheet_df[title].str.lower()
-
-                for balance_sheet_info in balance_sheet_infos:
-                    mask = balance_sheet_df[title].str.contains(
-                        balance_sheet_info, regex=True)
-                    selected_df = balance_sheet_df[mask]
-                    selected_df_year = selected_df[[title, year_column]]
-                    if len(selected_df_year) == 0:
-                        print(balance_sheet_info, " not found")
-
-                    # TODO
-                    # Make sure the . with decimal values are parse correctly
-                    values = [
-                        value*multiplier for value in selected_df_year[
-                            year_column].values]
-                    dict_data.update(
-                        zip(selected_df_year[title].values, values))
-
-                print(dict_data)
+                dict_data = parse_data_from_sheet(
+                    df_10k_per_sheet, sheet, data_list, year)
                 new_columns = dict_data.keys()
-                print(new_columns)
-                sys.exit()
+                all_dict_data.update(dict_data)
+                all_new_columns.extend(new_columns)
+            print(all_dict_data)
+            print(all_new_columns)
 
             sys.exit()
+            all_new_columns.append(new_columns)
             dict_data_year[year] = dict_data
 
         df_output = pd.DataFrame(data=dict_data_year, columns=new_columns).T
         df_output.to_csv(os.path.join(ticker, "selected_data.csv"))
+
+
+def clean_df(df_per_sheet, year):
+
+    # Put years in columns if in first row
+    r = re.compile(".*" + year)
+    for sheet, df in df_per_sheet.items():
+        title = df.columns[0]
+        year_column_list = list(
+            filter(r.match, df.columns))
+        if not year_column_list:
+            df.iloc[0] = df.iloc[0].fillna("")
+            first_row = [str(value) for value in df.iloc[0].values[1:]]
+            year_first_row = list(
+                filter(r.match, first_row))
+            if year_first_row:
+                new_columns = [title] + list(first_row)
+                columns_renaming = dict(zip(df.columns, new_columns))
+                cleaned_df = df.rename(columns=columns_renaming)
+                df_per_sheet[sheet] = cleaned_df
+
+    # Put 'title' as sheet name and lower
+    df_per_sheet_title = {}
+    for sheet, df in df_per_sheet.items():
+        title = df.columns[0].lower()
+        df_per_sheet_title[title] = df
+    print(df_per_sheet_title.keys())
+    sys.exit()
+    return df
+
+
+def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
+
+    dict_data = {}
+    r = re.compile(".*" + sheet)
+    keys_couples = [(key, key.lower()) for key in df_10k_per_sheet.keys()]
+    match_back = dict(zip([keys_couple[
+        1] for keys_couple in keys_couples], [keys_couple[
+            0] for keys_couple in keys_couples]))
+    output = list(filter(r.match, [keys_couple[
+        1] for keys_couple in keys_couples]))
+    if output:
+        # TODO: Find a correct way to select the sheet
+        sheet_df = df_10k_per_sheet[match_back[output[0]]]
+        print(sheet_df)
+
+        r = re.compile(".*" + year)
+        year_column_list = list(
+            filter(r.match, sheet_df.columns))
+        assert len(year_column_list) == 1
+        year_column = year_column_list[0]
+
+        # Get multiplier
+        # TODO: Check other CSVs to make sure that works
+        title = sheet_df.columns[0]
+        if "million" in title.lower():
+            multiplier = 1000000
+        elif "thousands" in title.lower():
+            multiplier = 1000
+
+        sheet_df[title] = sheet_df[title].str.lower()
+
+        for data_point in data_list:
+            mask = sheet_df[title].str.contains(
+                data_point, regex=True)
+            selected_df = sheet_df[mask]
+            selected_df_year = selected_df[[title, year_column]]
+            if len(selected_df_year) == 0:
+                print(data_point, " not found")
+
+            # TODO
+            # Make sure the . with decimal values are parse correctly
+            values = [
+                value*multiplier for value in selected_df_year[
+                    year_column].values]
+            dict_data.update(
+                zip(selected_df_year[title].values, values))
+    else:
+        print("Sheet {} not found".format(sheet))
+
+    return dict_data
 
 
 def main(tickers_csv_fpath):
