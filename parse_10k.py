@@ -5,8 +5,10 @@ import sys
 import re
 import pandas as pd
 import requests
+import pprint
 
 from utils import create_document_list, get_cik, save_in_directory
+pp = pprint.PrettyPrinter(indent=4)
 
 
 def download_10k(ciks, priorto, years):
@@ -73,12 +75,18 @@ def select_data(tickers, years):
 
             # TODO
             # Make sure the currency is correct
+
+            # TODO
+            # Fix hack weightedaverage
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
-                                  "cash and cash equivalents", "equity",
+                                  "cash and cash equivalents",
+                                  "property equipment", "equity",
                                   "goodwill", "intangible assets", "debt"],
-                "statements of oper": ["operating income", "weighted-average diluted", "net income"],
-                "statements of cash": ["cash operating activities"]
+                "statements of operations": ["operating income",
+                                             "weightedaverage diluted",
+                                             "net income"],
+                "statements of cash flows": ["cash operating activities"]
             }
             all_dict_data = {}
             for sheet, data_list in data_per_sheet.items():
@@ -88,8 +96,8 @@ def select_data(tickers, years):
                 new_columns = dict_data.keys()
                 all_dict_data.update(dict_data)
                 all_new_columns.extend(new_columns)
-            print(all_dict_data)
-            print(all_new_columns)
+            pp.pprint(all_dict_data)
+            # pp.pprint(all_new_columns)
 
             sys.exit()
             all_new_columns.append(new_columns)
@@ -123,9 +131,8 @@ def clean_df(df_per_sheet, year):
     for sheet, df in df_per_sheet.items():
         title = df.columns[0].lower()
         df_per_sheet_title[title] = df
-    print(df_per_sheet_title.keys())
-    sys.exit()
-    return df
+
+    return df_per_sheet_title
 
 
 def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
@@ -150,7 +157,11 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         year_column = year_column_list[0]
 
         # Get multiplier
-        # TODO: Check other CSVs to make sure that works
+        # TODO
+        # Check other CSVs to make sure that works
+
+        # TODO
+        # What happens if both million and thousands in title
         title = sheet_df.columns[0]
         if "million" in title.lower():
             multiplier = 1000000
@@ -160,24 +171,43 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         sheet_df[title] = sheet_df[title].str.lower()
 
         for data_point in data_list:
-            mask = sheet_df[title].str.contains(
-                data_point, regex=True)
-            selected_df = sheet_df[mask]
+            list_r = data_point.split(" ")
+            sheet_df = sheet_df.dropna(subset=[title])
+            sheet_df["mask_col"] = sheet_df[title].apply(
+                lambda match: regex_per_word(list_r, match.split(" ")))
+            # sheet_df[title].str.contains(
+            #    data_point, regex=True).fillna(False)
+            selected_df = sheet_df[sheet_df["mask_col"]]
+            print(selected_df)
             selected_df_year = selected_df[[title, year_column]]
             if len(selected_df_year) == 0:
                 print(data_point, " not found")
 
             # TODO
             # Make sure the . with decimal values are parse correctly
-            values = [
-                value*multiplier for value in selected_df_year[
-                    year_column].values]
+            values = []
+            for i, value in enumerate(selected_df_year[title].values):
+                if "000" in value or "thousand" in value:
+                    values.append(selected_df_year[year_column].values[i]*1000)
+                else:
+                    values.append(
+                        selected_df_year[year_column].values[i]*multiplier)
+
             dict_data.update(
                 zip(selected_df_year[title].values, values))
     else:
         print("Sheet {} not found".format(sheet))
 
     return dict_data
+
+
+def regex_per_word(list_r, match):
+    print(list_r, match)
+    match = ["".join(filter(str.isalnum, item)) for item in match]
+    print(len(set(list_r).intersection(set(match))), len(set(list_r)))
+    if len(set(list_r).intersection(set(match))) == len(set(list_r)):
+        return True
+    return False
 
 
 def main(tickers_csv_fpath):
