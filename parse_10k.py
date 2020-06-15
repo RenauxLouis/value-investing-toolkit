@@ -15,14 +15,15 @@ from utils import create_document_list, get_cik, save_in_directory
 pp = pprint.PrettyPrinter(indent=4)
 
 
-def download_10k(ciks, priorto, years):
+def download_10k(ciks, priorto, years, dl_folder):
 
     filing_type = "10-K"
     count = 5
 
     for ticker, cik in ciks.items():
-        if os.path.exists(ticker):
-            rmtree(ticker)
+        ticker_folder = os.path.join(dl_folder, ticker)
+        if os.path.exists(ticker_folder):
+            rmtree(ticker_folder)
         # Get the 10k
 
         base_url = "http://www.sec.gov/cgi-bin/browse-edgar"
@@ -38,7 +39,7 @@ def download_10k(ciks, priorto, years):
                 url_fr_per_year[year] = urls[i]
 
             try:
-                save_in_directory(ticker, cik, priorto, url_fr_per_year)
+                save_in_directory(ticker_folder, cik, priorto, url_fr_per_year)
             except Exception as e:
                 print(str(e))  # Need to use str for Python 2.5
 
@@ -346,6 +347,7 @@ def regex_per_word(match, list_r):
 
 def main(tickers_csv_fpath):
 
+    dl_folder = "10k_data"
     tickers_df = pd.read_csv(tickers_csv_fpath)
     tickers = tickers_df["ticker"]
     ciks = get_cik(tickers)
@@ -354,7 +356,7 @@ def main(tickers_csv_fpath):
     last_year = int(priorto[: 4]) - 1
     years = range(last_year-4, last_year+1)
 
-    download_10k(ciks, priorto, years)
+    download_10k(ciks, priorto, years, dl_folder)
     select_data(tickers, years)
 
 
