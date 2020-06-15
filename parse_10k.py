@@ -5,7 +5,7 @@ import pprint
 import re
 import sys
 from datetime import datetime
-
+from shutil import rmtree
 import numpy as np
 import pandas as pd
 import requests
@@ -21,6 +21,8 @@ def download_10k(ciks, priorto, years):
     count = 5
 
     for ticker, cik in ciks.items():
+        if os.path.exists(ticker):
+            rmtree(ticker)
         # Get the 10k
 
         base_url = "http://www.sec.gov/cgi-bin/browse-edgar"
@@ -45,21 +47,21 @@ def download_10k(ciks, priorto, years):
 def select_data(tickers, years):
 
     for ticker in tickers:
-        columns = ["total assets", "total liabilities",
-                   "cash and cash equivalents", "interest rate",
-                   "operating income", "lease expense current year",
-                   "depreciation", "cash from operating activities",
-                   "purchases of property and equipement",
-                   "interest and other financial charges",
-                   "annual effective tax rate", "total equity",
-                   "non-controlling interest", "goodwill",
-                   "other intangible assets", "net earning / share diluted",
-                   "weighted average shares diluted", "shares outstanding",
-                   "highest director compensation",
-                   "highest board member compensation", "net income",
-                   "shares of insiders", "dividend/share", "preferred stock",
-                   "debt"]
-        dict_data_year = []
+        # columns = ["total assets", "total liabilities",
+        #            "cash and cash equivalents", "interest rate",
+        #            "operating income", "lease expense current year",
+        #            "depreciation", "cash from operating activities",
+        #            "purchases of property and equipement",
+        #            "interest and other financial charges",
+        #            "annual effective tax rate", "total equity",
+        #            "non-controlling interest", "goodwill",
+        #            "other intangible assets", "net earning / share diluted",
+        #            "weighted average shares diluted", "shares outstanding",
+        #            "highest director compensation",
+        #            "highest board member compensation", "net income",
+        #            "shares of insiders", "dividend/share", "preferred stock",
+        #            "debt"]
+        dict_data_year = {}
         all_new_columns = []
         all_lease_df = {}
         all_current_liabilities_df = {}
@@ -97,27 +99,44 @@ def select_data(tickers, years):
                                              "income per diluted share"],
                 "statements of cash flows": ["cash operating activities"]
             }
-            all_dict_data = {}
+            all_df_data = []
             for sheet, data_list in data_per_sheet.items():
 
-                dict_data = parse_data_from_sheet(
+                df_data = parse_data_from_sheet(
                     df_10k_per_sheet, sheet, data_list, year)
-                new_columns = dict_data.keys()
-                all_dict_data.update(dict_data)
+                new_columns = df_data.index.values
+                all_df_data.append(df_data)
                 all_new_columns.extend(new_columns)
-            pp.pprint(all_dict_data)
+            pp.pprint(all_df_data)
+            all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_df[year] = lease_df
             current_liabilities_df = get_current_liabilities_df(
                 df_10k_per_sheet, year)
             all_current_liabilities_df[year] = current_liabilities_df
 
-            # sys.exit()
-            all_new_columns.append(new_columns)
-            dict_data_year[year] = dict_data
+            dict_data_year[year] = all_df_data_concat
 
-        df_output = pd.DataFrame(data=dict_data_year, columns=new_columns).T
+        list_data_year = []
+        for year in sorted(dict_data_year.keys(), reverse=True):
+            print(year)
+            list_data_year.append(dict_data_year[year])
+
+        df_output = pd.concat(list_data_year, axis=1, join="outer")
+        df_output.columns = list(years)[::-1]
+
+        # columns_renaming = dict(zip(df_output.columns, years))
+        # df_output = df_output.rename(columns=columns_renaming)
         df_output.to_csv(os.path.join(ticker, "selected_data.csv"))
+        with pd.ExcelWriter(os.path.join(
+                ticker, "all_current_liabilities_df.xlsx")) as writer:
+            for year, df in all_current_liabilities_df.items():
+                df.to_excel(writer, sheet_name=year)
+        with pd.ExcelWriter(os.path.join(ticker,
+                                         "all_lease_df.xlsx")) as writer:
+            for year, df in all_lease_df.items():
+                if df is not None:
+                    df.to_excel(writer, sheet_name=year)
 
 
 def get_lease_df(df_10k_per_sheet, year):
@@ -127,8 +146,11 @@ def get_lease_df(df_10k_per_sheet, year):
     keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
     match_keys = np.array(list(map(functools.partial(
         regex_per_word, list_r=list_r), keys)))
-    selected_sheet = keys_array[match_keys]
-    return selected_sheet
+    selected_key = keys_array[match_keys]
+    if selected_key:
+        return df_10k_per_sheet[selected_key[0]]
+    else:
+        return None
     """
     all_selected = []
     for sheet, df in df_10k_per_sheet.items():
@@ -158,7 +180,6 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     sheet_df = find_sheet(df_10k_per_sheet, "balance sheet")
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
-    print(sheet_df)
     list_r = ["current", "liabilities"]
     sheet_df = sheet_df.dropna(subset=[first_col])
     sheet_df["mask_col"] = sheet_df[first_col].apply(
@@ -191,7 +212,7 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
             sum_current_liabilities += row[year_col]*start
     """
     selected_sheet = sheet_df.iloc[first_i:last_i+1]
-    return selected_sheet[year_col]
+    return selected_sheet[[first_col, year_col]]
 
 
 def clean_df(df_per_sheet, year):
@@ -213,7 +234,7 @@ def clean_df(df_per_sheet, year):
                 cleaned_df = df.rename(columns=columns_renaming)
                 df_per_sheet[sheet] = cleaned_df
 
-    # Put 'title' as sheet name and lower
+    # Put "title" as sheet name and lower
     df_per_sheet_title = {}
     for sheet, df in df_per_sheet.items():
         title = df.columns[0].lower()
@@ -295,7 +316,9 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         dict_data.update(
             zip(selected_df_year[first_col].values, values))
 
-    return dict_data
+    df_data = pd.DataFrame.from_dict(dict_data, orient='index')
+
+    return df_data
 
 
 def regex_per_word(match, list_r):
@@ -332,7 +355,7 @@ def main(tickers_csv_fpath):
     last_year = int(priorto[: 4]) - 1
     years = range(last_year-4, last_year+1)
 
-    # download_10k(ciks, priorto, years)
+    download_10k(ciks, priorto, years)
     select_data(tickers, years)
 
 
