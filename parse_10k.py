@@ -33,10 +33,9 @@ def download_10k(ciks, priorto, years):
         if r.status_code == 200:
             data = r.text
             urls = create_document_list(data)
-
             url_fr_per_year = {}
-            for year in years:
-                url_fr_per_year[year] = urls[year]
+            for i, year in enumerate(years[::-1]):
+                url_fr_per_year[year] = urls[i]
 
             try:
                 save_in_directory(ticker, cik, priorto, url_fr_per_year)
