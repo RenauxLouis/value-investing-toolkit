@@ -1,13 +1,17 @@
 import argparse
-from datetime import datetime
+import functools
 import os
-import sys
+import pprint
 import re
+import sys
+from datetime import datetime
+
+import numpy as np
 import pandas as pd
 import requests
-import pprint
 
 from utils import create_document_list, get_cik, save_in_directory
+
 pp = pprint.PrettyPrinter(indent=4)
 
 
@@ -57,10 +61,11 @@ def select_data(tickers, years):
                    "debt"]
         dict_data_year = []
         all_new_columns = []
+        all_lease_df = {}
+        all_current_liabilities_df = {}
         _10k_fpaths = [os.path.join(ticker, fname)
                        for fname in os.listdir(ticker)]
         for _10k_fpath in _10k_fpaths:
-            print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
 
             df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
@@ -78,6 +83,9 @@ def select_data(tickers, years):
 
             # TODO
             # Fix hack weightedaverage
+
+            # TODO
+            # Are positive/negative values ok
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
                                   "cash and cash equivalents",
@@ -85,7 +93,8 @@ def select_data(tickers, years):
                                   "goodwill", "intangible assets", "debt"],
                 "statements of operations": ["operating income",
                                              "weightedaverage diluted",
-                                             "net income"],
+                                             "net income", "interest expense",
+                                             "income per diluted share"],
                 "statements of cash flows": ["cash operating activities"]
             }
             all_dict_data = {}
@@ -97,7 +106,11 @@ def select_data(tickers, years):
                 all_dict_data.update(dict_data)
                 all_new_columns.extend(new_columns)
             pp.pprint(all_dict_data)
-            # pp.pprint(all_new_columns)
+            lease_df = get_lease_df(df_10k_per_sheet, year)
+            all_lease_df[year] = lease_df
+            current_liabilities_df = get_current_liabilities_df(
+                df_10k_per_sheet, year)
+            all_current_liabilities_df[year] = current_liabilities_df
 
             sys.exit()
             all_new_columns.append(new_columns)
@@ -107,15 +120,56 @@ def select_data(tickers, years):
         df_output.to_csv(os.path.join(ticker, "selected_data.csv"))
 
 
+def get_lease_df(df_10k_per_sheet, year):
+
+    list_r = ["operating", "lease"]
+    keys_array = np.array(list(df_10k_per_sheet.keys()))
+    keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
+    match_keys = np.array(list(map(functools.partial(
+        regex_per_word, list_r=list_r), keys)))
+    selected_sheet = keys_array[match_keys]
+    return selected_sheet
+    """
+    all_selected = []
+    for sheet, df in df_10k_per_sheet.items():
+        r = re.compile(".*" + year)
+        year_col_list = list(filter(r.match, df.columns))
+        if len(year_col_list) > 0:
+            year_col = year_col_list[0]
+
+            first_col = df.columns[0]
+            df[first_col] = df[first_col].str.lower()
+            list_r = ["operating", "leases"]
+
+            df = df.dropna(subset=[first_col])
+            df["mask_col"] = df[first_col].apply(
+                lambda match: regex_per_word(match.split(" "), list_r))
+            selected_df = df[df["mask_col"]]
+            selected_df_year = selected_df[[first_col, year_col]]
+            if len(selected_df_year):
+                print(selected_df_year)
+                all_selected.append((selected_df_year[first_col].values,
+                                     selected_df_year[year_col].values))
+    sys.exit(all_selected)
+    """
+
+
+def get_current_liabilities_df(df_10k_per_sheet, year):
+    sheet = find_sheet(df_10k_per_sheet, "balance sheet")
+    print(sheet)
+    sys.exit()
+    return selected_sheet
+
+
 def clean_df(df_per_sheet, year):
 
     # Put years in columns if in first row
     r = re.compile(".*" + year)
     for sheet, df in df_per_sheet.items():
         title = df.columns[0]
-        year_column_list = list(
+        year_col_list = list(
             filter(r.match, df.columns))
-        if not year_column_list:
+        if not year_col_list:
             df.iloc[0] = df.iloc[0].fillna("")
             first_row = [str(value) for value in df.iloc[0].values[1:]]
             year_first_row = list(
@@ -135,9 +189,8 @@ def clean_df(df_per_sheet, year):
     return df_per_sheet_title
 
 
-def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
+def find_sheet(df_10k_per_sheet, sheet):
 
-    dict_data = {}
     r = re.compile(".*" + sheet)
     keys_couples = [(key, key.lower()) for key in df_10k_per_sheet.keys()]
     match_back = dict(zip([keys_couple[
@@ -145,67 +198,87 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
             0] for keys_couple in keys_couples]))
     output = list(filter(r.match, [keys_couple[
         1] for keys_couple in keys_couples]))
-    if output:
-        # TODO: Find a correct way to select the sheet
-        sheet_df = df_10k_per_sheet[match_back[output[0]]]
-        print(sheet_df)
+    # TODO: Find a correct way to select the sheet
+    sheet_df = df_10k_per_sheet[match_back[output[0]]]
 
-        r = re.compile(".*" + year)
-        year_column_list = list(
-            filter(r.match, sheet_df.columns))
-        assert len(year_column_list) == 1
-        year_column = year_column_list[0]
+    return sheet_df
 
-        # Get multiplier
+
+def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
+
+    dict_data = {}
+    sheet_df = find_sheet(df_10k_per_sheet, sheet)
+
+    r = re.compile(".*" + year)
+    year_col_list = list(
+        filter(r.match, sheet_df.columns))
+    assert len(year_col_list) == 1
+    year_col = year_col_list[0]
+
+    # Get multiplier
+    # TODO
+    # Check other CSVs to make sure that works
+
+    # TODO
+    # What happens if both million and thousands in title
+    first_col = sheet_df.columns[0]
+    if "million" in first_col.lower():
+        multiplier = 1000000
+    elif "thousands" in first_col.lower():
+        multiplier = 1000
+
+    sheet_df[first_col] = sheet_df[first_col].str.lower()
+
+    for data_point in data_list:
+        list_r = data_point.split(" ")
+        sheet_df = sheet_df.dropna(subset=[first_col])
+        sheet_df["mask_col"] = sheet_df[first_col].apply(
+            lambda match: regex_per_word(match.split(" "), list_r))
+        # sheet_df[first_col].str.contains(
+        #    data_point, regex=True).fillna(False)
+        selected_df = sheet_df[sheet_df["mask_col"]]
+        selected_df_year = selected_df[[first_col, year_col]]
+        if len(selected_df_year) == 0:
+            print(data_point, " not found")
+
         # TODO
-        # Check other CSVs to make sure that works
+        # Make sure the . with decimal values are parse correctly
+        values = []
+        for i, value in enumerate(selected_df_year[first_col].values):
+            if "000" in value or "thousand" in value:
+                values.append(selected_df_year[year_col].values[i]*1000)
+            elif "per" in value and "share" in value:
+                values.append(selected_df_year[year_col].values[i])
+            else:
+                values.append(
+                    selected_df_year[year_col].values[i]*multiplier)
 
-        # TODO
-        # What happens if both million and thousands in title
-        title = sheet_df.columns[0]
-        if "million" in title.lower():
-            multiplier = 1000000
-        elif "thousands" in title.lower():
-            multiplier = 1000
-
-        sheet_df[title] = sheet_df[title].str.lower()
-
-        for data_point in data_list:
-            list_r = data_point.split(" ")
-            sheet_df = sheet_df.dropna(subset=[title])
-            sheet_df["mask_col"] = sheet_df[title].apply(
-                lambda match: regex_per_word(list_r, match.split(" ")))
-            # sheet_df[title].str.contains(
-            #    data_point, regex=True).fillna(False)
-            selected_df = sheet_df[sheet_df["mask_col"]]
-            print(selected_df)
-            selected_df_year = selected_df[[title, year_column]]
-            if len(selected_df_year) == 0:
-                print(data_point, " not found")
-
-            # TODO
-            # Make sure the . with decimal values are parse correctly
-            values = []
-            for i, value in enumerate(selected_df_year[title].values):
-                if "000" in value or "thousand" in value:
-                    values.append(selected_df_year[year_column].values[i]*1000)
-                else:
-                    values.append(
-                        selected_df_year[year_column].values[i]*multiplier)
-
-            dict_data.update(
-                zip(selected_df_year[title].values, values))
-    else:
-        print("Sheet {} not found".format(sheet))
+        dict_data.update(
+            zip(selected_df_year[first_col].values, values))
 
     return dict_data
 
 
-def regex_per_word(list_r, match):
-    print(list_r, match)
+def regex_per_word(match, list_r):
     match = ["".join(filter(str.isalnum, item)) for item in match]
-    print(len(set(list_r).intersection(set(match))), len(set(list_r)))
-    if len(set(list_r).intersection(set(match))) == len(set(list_r)):
+    list_r_no_s = []
+    for item in list_r:
+        if item:
+            if item[-1] == "s":
+                list_r_no_s.append(item[:-1])
+            else:
+                list_r_no_s.append(item)
+
+    match_no_s = []
+    for item in match:
+        if item:
+            if item[-1] == "s":
+                match_no_s.append(item[:-1])
+            else:
+                match_no_s.append(item)
+
+    if len(set(list_r_no_s).intersection(set(match_no_s))) == len(
+            set(list_r_no_s)):
         return True
     return False
 
