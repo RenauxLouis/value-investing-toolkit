@@ -112,7 +112,7 @@ def select_data(tickers, years):
                 df_10k_per_sheet, year)
             all_current_liabilities_df[year] = current_liabilities_df
 
-            sys.exit()
+            # sys.exit()
             all_new_columns.append(new_columns)
             dict_data_year[year] = dict_data
 
@@ -155,10 +155,43 @@ def get_lease_df(df_10k_per_sheet, year):
 
 
 def get_current_liabilities_df(df_10k_per_sheet, year):
-    sheet = find_sheet(df_10k_per_sheet, "balance sheet")
-    print(sheet)
-    sys.exit()
-    return selected_sheet
+    sheet_df = find_sheet(df_10k_per_sheet, "balance sheet")
+    sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
+        sheet_df, year)
+    print(sheet_df)
+    list_r = ["current", "liabilities"]
+    sheet_df = sheet_df.dropna(subset=[first_col])
+    sheet_df["mask_col"] = sheet_df[first_col].apply(
+        lambda match: regex_per_word(match.split(" "), list_r))
+    first_current_liabilities_row = sheet_df[sheet_df["mask_col"]
+                                             ][[first_col, year_col]].iloc[0]
+    assert np.isnan(first_current_liabilities_row[year_col])
+    first_i = first_current_liabilities_row.name
+
+    list_r = ["total", "current", "liabilities"]
+    sheet_df = sheet_df.dropna(subset=[first_col])
+    sheet_df["mask_col"] = sheet_df[first_col].apply(
+        lambda match: regex_per_word(match.split(" "), list_r))
+    last_current_liabilities_row = sheet_df[sheet_df["mask_col"]
+                                            ][[first_col, year_col]].iloc[0]
+    last_i = last_current_liabilities_row.name
+    """
+    sum_current_liabilities = 0
+    start = False
+    for i, row in sheet_df.iterrows():
+        if row[first_col] == first_current_liabilities_row[first_col]:
+            start = True
+            first_i = i
+        if start:
+            # TODO
+            # ROUNDING ERROR
+            if row[year_col] == sum_current_liabilities:
+                last_i = i
+                break
+            sum_current_liabilities += row[year_col]*start
+    """
+    selected_sheet = sheet_df.iloc[first_i:last_i+1]
+    return selected_sheet[year_col]
 
 
 def clean_df(df_per_sheet, year):
@@ -204,10 +237,7 @@ def find_sheet(df_10k_per_sheet, sheet):
     return sheet_df
 
 
-def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
-
-    dict_data = {}
-    sheet_df = find_sheet(df_10k_per_sheet, sheet)
+def clean_col_and_multiplier(sheet_df, year):
 
     r = re.compile(".*" + year)
     year_col_list = list(
@@ -228,6 +258,15 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         multiplier = 1000
 
     sheet_df[first_col] = sheet_df[first_col].str.lower()
+    return sheet_df, first_col, year_col, multiplier
+
+
+def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
+
+    dict_data = {}
+    sheet_df = find_sheet(df_10k_per_sheet, sheet)
+    sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
+        sheet_df, year)
 
     for data_point in data_list:
         list_r = data_point.split(" ")
