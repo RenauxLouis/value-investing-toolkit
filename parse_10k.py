@@ -44,7 +44,7 @@ def download_10k(ciks, priorto, years, dl_folder):
                 print(str(e))  # Need to use str for Python 2.5
 
 
-def select_data(tickers, years):
+def select_data(tickers, years, naming_income_statement):
 
     for ticker in tickers:
         # columns = ["total assets", "total liabilities",
@@ -69,10 +69,12 @@ def select_data(tickers, years):
                        for fname in os.listdir(ticker)]
         for _10k_fpath in _10k_fpaths:
             year = _10k_fpath.split(".")[0][-4:]
+            print("Selecting data from", year)
 
             df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
             df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
 
+            # pp.pprint(list(df_10k_per_sheet.keys()))
             # TODO
             # Find if that split makes sense for other tickers
             # May need to pull first column instead of sheet title
@@ -88,17 +90,32 @@ def select_data(tickers, years):
 
             # TODO
             # Are positive/negative values ok
+            # "statements of operations" or "income statement"
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
                                   "cash and cash equivalents",
                                   "property equipment", "equity",
                                   "goodwill", "intangible assets", "debt"],
-                "statements of operations": ["operating income",
-                                             "weightedaverage diluted",
-                                             "net income", "interest expense",
-                                             "income per diluted share"],
-                "statements of cash flows": ["cash operating activities"]
+                naming_income_statement: ["operating income",
+                                          "weightedaverage diluted",
+                                          "net income", "interest expense",
+                                          "income per diluted share"],
+                "statements cash flows": ["cash operating activities"]
             }
+
+            # Check if all match
+            for sheet, data_list in data_per_sheet.items():
+                list_r = sheet.split(" ")
+                keys_array = np.array(list(df_10k_per_sheet.keys()))
+                keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
+                match_sheets = np.array(list(map(functools.partial(
+                    regex_per_word, list_r=list_r), keys)))
+                selected_sheet = keys_array[match_sheets]
+                if not len(selected_sheet):
+                    print(sheet, "not found")
+                    sys.exit()
+
+            print("All needed sheet are found in the 10k document")
             all_df_data = []
             for sheet, data_list in data_per_sheet.items():
 
@@ -252,10 +269,10 @@ def find_sheet(df_10k_per_sheet, sheet):
             0] for keys_couple in keys_couples]))
     output = list(filter(r.match, [keys_couple[
         1] for keys_couple in keys_couples]))
-    # TODO: Find a correct way to select the sheet
-    sheet_df = df_10k_per_sheet[match_back[output[0]]]
-
-    return sheet_df
+    if len(output):
+        # TODO: Find a correct way to select the sheet
+        return df_10k_per_sheet[match_back[output[0]]]
+    return []
 
 
 def clean_col_and_multiplier(sheet_df, year):
@@ -345,19 +362,21 @@ def regex_per_word(match, list_r):
     return False
 
 
-def main(tickers_csv_fpath):
+def main(tickers_csv_fpath, naming_income_statement):
 
     dl_folder = "10k_data"
     tickers_df = pd.read_csv(tickers_csv_fpath)
     tickers = tickers_df["ticker"]
+    print("Parsing the last 5 10K documents from tickers:",
+          " ".join(tickers))
     ciks = get_cik(tickers)
 
     priorto = datetime.today().strftime("%Y%m%d")
-    last_year = int(priorto[: 4]) - 1
+    last_year = int(priorto[:4]) - 1
     years = range(last_year-4, last_year+1)
 
     download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, years)
+    select_data(tickers, years, naming_income_statement)
 
 
 def parse_args():
@@ -368,6 +387,10 @@ def parse_args():
         "--tickers_csv_fpath",
         type=str,
         default="list_tickers.csv")
+    parser.add_argument(
+        "--naming_income_statement",
+        type=str,
+        default="income statement")
     args = parser.parse_args()
 
     return args
@@ -376,4 +399,5 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    main(args.tickers_csv_fpath)
+    main(args.tickers_csv_fpath,
+         args.naming_income_statement)
