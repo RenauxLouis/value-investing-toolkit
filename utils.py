@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 
 import requests
 from bs4 import BeautifulSoup
@@ -28,10 +29,11 @@ def create_document_list(data):
     """
     soup = BeautifulSoup(data, features="lxml")
     # store the link in the list
-    link_list = [link.string for link in soup.find_all("filinghref")]
-    date_list = [int(link.string[:4]) -
-                 1 for link in soup.find_all("datefiled")]
+    link_list = [link.string for link in soup.find_all("filinghref")][:5]
+    # date_list = [int(link.string[:4]) -
+    #                  1 for link in soup.find_all("datefiled")]
 
+    accession_numbers = [link.split("/")[-2] for link in link_list]
     print("Number of files to download: {0}".format(len(link_list)))
     print("Starting download...")
 
@@ -39,7 +41,7 @@ def create_document_list(data):
     fr_urls = [os.path.join(os.path.dirname(
         link), "Financial_Report.xlsx") for link in link_list]
 
-    return dict(zip(date_list, fr_urls))
+    return fr_urls, accession_numbers
 
 
 def save_in_directory(company_code, cik, priorto, url_fr_per_year):
