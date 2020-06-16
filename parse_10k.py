@@ -44,9 +44,10 @@ def download_10k(ciks, priorto, years, dl_folder):
                 print(str(e))  # Need to use str for Python 2.5
 
 
-def select_data(tickers, years, naming_income_statement):
+def select_data(tickers, years, naming_income_statement, dl_folder):
 
     for ticker in tickers:
+        dir_ticker = os.path.join(dl_folder, ticker)
         # columns = ["total assets", "total liabilities",
         #            "cash and cash equivalents", "interest rate",
         #            "operating income", "lease expense current year",
@@ -65,9 +66,10 @@ def select_data(tickers, years, naming_income_statement):
         all_new_columns = []
         all_lease_df = {}
         all_current_liabilities_df = {}
-        _10k_fpaths = [os.path.join(ticker, fname)
-                       for fname in os.listdir(ticker)]
+        _10k_fpaths = [os.path.join(dir_ticker, fname)
+                       for fname in os.listdir(dir_ticker)]
         for _10k_fpath in _10k_fpaths:
+            print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
             print("Selecting data from", year)
 
@@ -105,17 +107,13 @@ def select_data(tickers, years, naming_income_statement):
 
             # Check if all match
             for sheet, data_list in data_per_sheet.items():
-                list_r = sheet.split(" ")
-                keys_array = np.array(list(df_10k_per_sheet.keys()))
-                keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
-                match_sheets = np.array(list(map(functools.partial(
-                    regex_per_word, list_r=list_r), keys)))
-                selected_sheet = keys_array[match_sheets]
+                selected_sheet = regex_per_word_wrapper(
+                    sheet, df_10k_per_sheet.keys())
                 if not len(selected_sheet):
                     print(sheet, "not found")
                     sys.exit()
-
             print("All needed sheet are found in the 10k document")
+
             all_df_data = []
             for sheet, data_list in data_per_sheet.items():
 
@@ -124,7 +122,7 @@ def select_data(tickers, years, naming_income_statement):
                 new_columns = df_data.index.values
                 all_df_data.append(df_data)
                 all_new_columns.extend(new_columns)
-            pp.pprint(all_df_data)
+            # pp.pprint(all_df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_df[year] = lease_df
@@ -144,12 +142,12 @@ def select_data(tickers, years, naming_income_statement):
 
         # columns_renaming = dict(zip(df_output.columns, years))
         # df_output = df_output.rename(columns=columns_renaming)
-        df_output.to_csv(os.path.join(ticker, "selected_data.csv"))
+        df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
         with pd.ExcelWriter(os.path.join(
-                ticker, "all_current_liabilities_df.xlsx")) as writer:
+                dir_ticker, "all_current_liabilities_df.xlsx")) as writer:
             for year, df in all_current_liabilities_df.items():
                 df.to_excel(writer, sheet_name=year)
-        with pd.ExcelWriter(os.path.join(ticker,
+        with pd.ExcelWriter(os.path.join(dir_ticker,
                                          "all_lease_df.xlsx")) as writer:
             for year, df in all_lease_df.items():
                 if df is not None:
@@ -194,7 +192,9 @@ def get_lease_df(df_10k_per_sheet, year):
 
 
 def get_current_liabilities_df(df_10k_per_sheet, year):
-    sheet_df = find_sheet(df_10k_per_sheet, "balance sheet")
+    selected_key = regex_per_word_wrapper(
+        "balance sheet", df_10k_per_sheet.keys())
+    sheet_df = df_10k_per_sheet[selected_key]
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
     list_r = ["current", "liabilities"]
@@ -302,7 +302,8 @@ def clean_col_and_multiplier(sheet_df, year):
 def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
 
     dict_data = {}
-    sheet_df = find_sheet(df_10k_per_sheet, sheet)
+    sheet_key = regex_per_word_wrapper(sheet, df_10k_per_sheet.keys())
+    sheet_df = df_10k_per_sheet[sheet_key]
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
 
@@ -336,6 +337,18 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
     df_data = pd.DataFrame.from_dict(dict_data, orient='index')
 
     return df_data
+
+
+def regex_per_word_wrapper(sheet, df_10k_keys):
+    list_r = sheet.split(" ")
+    keys_array = np.array(list(df_10k_keys))
+    keys = [key.split(" ") for key in df_10k_keys]
+    match_key = np.array(list(map(functools.partial(
+        regex_per_word, list_r=list_r), keys)))
+    selected_key = keys_array[match_key]
+    if len(selected_key):
+        return selected_key[0]
+    return None
 
 
 def regex_per_word(match, list_r):
@@ -376,7 +389,7 @@ def main(tickers_csv_fpath, naming_income_statement):
     years = range(last_year-4, last_year+1)
 
     download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, years, naming_income_statement)
+    select_data(tickers, years, naming_income_statement, dl_folder)
 
 
 def parse_args():
