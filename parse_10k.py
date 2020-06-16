@@ -6,21 +6,22 @@ import re
 import sys
 from datetime import datetime
 from shutil import rmtree
+
 import numpy as np
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 
 from utils import create_document_list, get_cik, save_in_directory
 
 pp = pprint.PrettyPrinter(indent=4)
 
 
-def download_10k(ciks, priorto, years, dl_folder):
+def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
     filing_type = "10-K"
     count = 5
-
-    for ticker, cik in ciks.items():
+    for ticker, cik in ciks_per_ticker.items():
         ticker_folder = os.path.join(dl_folder, ticker)
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
@@ -33,41 +34,52 @@ def download_10k(ciks, priorto, years, dl_folder):
         r = requests.get(base_url, params=params)
         if r.status_code == 200:
             data = r.text
-            urls = create_document_list(data)
+            urls, accession_numbers = create_document_list(data)
             url_fr_per_year = {}
-            for i, year in enumerate(years[::-1]):
+            for i, year in enumerate(years[:: -1]):
                 url_fr_per_year[year] = urls[i]
 
             try:
                 save_in_directory(ticker_folder, cik, priorto, url_fr_per_year)
             except Exception as e:
-                print(str(e))  # Need to use str for Python 2.5
+                sys.exit(e)
+
+            for accession_number, year in zip(accession_numbers, years[::-1]):
+                download_10k_htm(cik, accession_number,
+                                 ticker_folder, year)
+
+
+def download_10k_htm(cik, accession_number, ticker_folder, year):
+    year_str = str(year)
+    base_edgar_url = "https://www.sec.gov/Archives/edgar/data"
+    accession_number_url = os.path.join(base_edgar_url, cik, accession_number)
+    r = requests.get(accession_number_url)
+    if r.status_code == 200:
+        data = r.text
+        soup = BeautifulSoup(data, features="lxml")
+        links = [link.get("href") for link in soup.findAll("a")]
+        htm_urls = [link for link in links if (
+            link.split(".")[-1] == "htm" and "10k" in link)]
+        assert len(htm_urls) == 1
+        htm_fname = os.path.basename(htm_urls[0])
+        htm_url = os.path.join(accession_number_url, htm_fname)
+        r_htm = requests.get(htm_url)
+        fpath = os.path.join(ticker_folder, f"10k_{year_str}.htm")
+        with open(fpath, "wb") as output:
+            output.write(r_htm.content)
 
 
 def select_data(tickers, years, naming_income_statement, dl_folder):
 
     for ticker in tickers:
         dir_ticker = os.path.join(dl_folder, ticker)
-        # columns = ["total assets", "total liabilities",
-        #            "cash and cash equivalents", "interest rate",
-        #            "operating income", "lease expense current year",
-        #            "depreciation", "cash from operating activities",
-        #            "purchases of property and equipement",
-        #            "interest and other financial charges",
-        #            "annual effective tax rate", "total equity",
-        #            "non-controlling interest", "goodwill",
-        #            "other intangible assets", "net earning / share diluted",
-        #            "weighted average shares diluted", "shares outstanding",
-        #            "highest director compensation",
-        #            "highest board member compensation", "net income",
-        #            "shares of insiders", "dividend/share", "preferred stock",
-        #            "debt"]
         dict_data_year = {}
         all_new_columns = []
         all_lease_df = {}
         all_current_liabilities_df = {}
         _10k_fpaths = [os.path.join(dir_ticker, fname)
-                       for fname in os.listdir(dir_ticker)]
+                       for fname in os.listdir(dir_ticker) if fname.split(".")[
+                           -1] == "xlsx"]
         for _10k_fpath in _10k_fpaths:
             print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
@@ -334,7 +346,7 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         dict_data.update(
             zip(selected_df_year[first_col].values, values))
 
-    df_data = pd.DataFrame.from_dict(dict_data, orient='index')
+    df_data = pd.DataFrame.from_dict(dict_data, orient="index")
 
     return df_data
 
