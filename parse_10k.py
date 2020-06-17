@@ -111,9 +111,10 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
                                   "property equipment", "equity",
                                   "goodwill", "intangible assets", "debt"],
                 naming_income_statement: ["operating income",
-                                          "weightedaverage diluted",
+                                          "weightedaverage",
+                                          "weighted average",
                                           "net income", "interest expense",
-                                          "income per diluted share"],
+                                          "per share", "dividend"],
                 "statements cash flows": ["cash operating activities"]
             }
 
@@ -122,7 +123,7 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
                 selected_sheet = regex_per_word_wrapper(
                     sheet, df_10k_per_sheet.keys())
                 if not len(selected_sheet):
-                    print(sheet, "not found")
+                    print("####", sheet, "not found")
                     sys.exit()
             print("All needed sheet are found in the 10k document")
 
@@ -269,6 +270,33 @@ def clean_df(df_per_sheet, year):
         title = df.columns[0].lower()
         df_per_sheet_title[title] = df
 
+    # Add parts titles within following lines
+    for sheet, df in df_per_sheet.items():
+        title = df.columns[0]
+        year_col = df.columns[1]
+        if year in year_col:
+            try:
+                df["isnull"] = df[year_col].isnull()
+            except Exception as e:
+                print(e)
+                continue
+            str_add = ""
+            titles = [df.loc[0, title]]
+            for i, row in df.iterrows():
+                if i == 0:
+                    continue
+                if row["isnull"]:
+                    str_add = ""
+                    if isinstance(row[title], str) and row[title][-1] == ":":
+                        str_add = row[title]
+                        titles.append(row[title])
+                        continue
+                if str_add:
+                    titles.append("(" + str_add[:-1] + ") " + row[title])
+                else:
+                    titles.append(row[title])
+            df[title] = titles
+
     return df_per_sheet_title
 
 
@@ -329,8 +357,7 @@ def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
         selected_df = sheet_df[sheet_df["mask_col"]]
         selected_df_year = selected_df[[first_col, year_col]]
         if len(selected_df_year) == 0:
-            print(data_point, " not found")
-
+            print("####", data_point, " not found")
         # TODO
         # Make sure the . with decimal values are parse correctly
         values = []
