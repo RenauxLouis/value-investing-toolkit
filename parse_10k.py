@@ -285,16 +285,21 @@ def clean_df(df_per_sheet, year):
             for i, row in df.iterrows():
                 if i == 0:
                     continue
+                row_v = row[title]
                 if row["isnull"]:
                     str_add = ""
-                    if isinstance(row[title], str) and row[title][-1] == ":":
-                        str_add = row[title]
-                        titles.append(row[title])
+                    if isinstance(row_v, str) and row_v[-1] == ":":
+                        str_add = row_v[:-1]
+                        titles.append(row_v)
                         continue
                 if str_add:
-                    titles.append("(" + str_add[:-1] + ") " + row[title])
+                    titles.append("(" + str_add + ") " + row_v)
+                    if isinstance(row_v, str) and (
+                        "total" in row_v.lower()) and (
+                            str_add in row_v):
+                        str_add = ""
                 else:
-                    titles.append(row[title])
+                    titles.append(row_v)
             df[title] = titles
 
     return df_per_sheet_title
