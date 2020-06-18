@@ -110,12 +110,12 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
                                   "cash and cash equivalents",
                                   "property equipment", "equity",
                                   "goodwill", "intangible assets", "debt"],
-                naming_income_statement: ["operating income",
+                naming_income_statement: ["operating income", "operating profit",
                                           "weightedaverage",
                                           "weighted average",
                                           "net income", "interest expense",
                                           "per share", "dividend"],
-                "statements cash flows": ["cash operating activities"]
+                "statements cash flows": ["cash operating", "cash operation"]
             }
 
             # Check if all match
@@ -175,7 +175,7 @@ def get_lease_df(df_10k_per_sheet, year):
     match_keys = np.array(list(map(functools.partial(
         regex_per_word, list_r=list_r), keys)))
     selected_key = keys_array[match_keys]
-    if selected_key:
+    if selected_key.size > 0:
         return df_10k_per_sheet[selected_key[0]]
     else:
         return None
