@@ -155,9 +155,6 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
         merged_current_liabilities_df = reduce(lambda left, right: pd.merge(
             left, right, on=["title"], how="outer"), list_current_liabilities)
 
-        # merged_current_liabilities_df = pd.concat(
-        #     list_current_liabilities, axis=1, join="outer")
-
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
         merged_current_liabilities_df.to_csv(os.path.join(
@@ -170,7 +167,8 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
 
 
 def get_lease_df(df_10k_per_sheet, year):
-
+    print(df_10k_per_sheet.keys())
+    sys.exit()
     list_r = ["operating", "lease"]
     keys_array = np.array(list(df_10k_per_sheet.keys()))
     keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
@@ -181,29 +179,6 @@ def get_lease_df(df_10k_per_sheet, year):
         return df_10k_per_sheet[selected_key[0]]
     else:
         return None
-    """
-    all_selected = []
-    for sheet, df in df_10k_per_sheet.items():
-        r = re.compile(".*" + year)
-        year_col_list = list(filter(r.match, df.columns))
-        if len(year_col_list) > 0:
-            year_col = year_col_list[0]
-
-            first_col = df.columns[0]
-            df[first_col] = df[first_col].str.lower()
-            list_r = ["operating", "leases"]
-
-            df = df.dropna(subset=[first_col])
-            df["mask_col"] = df[first_col].apply(
-                lambda match: regex_per_word(match.split(" "), list_r))
-            selected_df = df[df["mask_col"]]
-            selected_df_year = selected_df[[first_col, year_col]]
-            if len(selected_df_year):
-                print(selected_df_year)
-                all_selected.append((selected_df_year[first_col].values,
-                                     selected_df_year[year_col].values))
-    sys.exit(all_selected)
-    """
 
 
 def get_current_liabilities_df(df_10k_per_sheet, year):
@@ -228,21 +203,7 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     last_current_liabilities_row = sheet_df[sheet_df["mask_col"]
                                             ][[first_col, year_col]].iloc[0]
     last_i = last_current_liabilities_row.name
-    """
-    sum_current_liabilities = 0
-    start = False
-    for i, row in sheet_df.iterrows():
-        if row[first_col] == first_current_liabilities_row[first_col]:
-            start = True
-            first_i = i
-        if start:
-            # TODO
-            # ROUNDING ERROR
-            if row[year_col] == sum_current_liabilities:
-                last_i = i
-                break
-            sum_current_liabilities += row[year_col]*start
-    """
+
     selected_sheet = sheet_df.iloc[first_i:last_i+1]
     return_sheet = selected_sheet[[first_col, year_col]]
 
