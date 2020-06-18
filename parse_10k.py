@@ -245,6 +245,14 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     """
     selected_sheet = sheet_df.iloc[first_i:last_i+1]
     return_sheet = selected_sheet[[first_col, year_col]]
+
+    multiplier = 1
+    if "million" in return_sheet.columns[0].lower():
+        multiplier = 1000000
+    elif "thousands" in return_sheet.columns[0].lower():
+        multiplier = 1000
+
+    return_sheet[year_col] = return_sheet[year_col]*multiplier
     return_sheet = return_sheet.rename(columns={first_col: "title"})
 
     return return_sheet
