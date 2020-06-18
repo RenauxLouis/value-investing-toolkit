@@ -5,6 +5,7 @@ import pprint
 import re
 import sys
 from datetime import datetime
+from functools import reduce
 from shutil import rmtree
 
 import numpy as np
@@ -74,9 +75,8 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
     for ticker in tickers:
         dir_ticker = os.path.join(dl_folder, ticker)
         dict_data_year = {}
-        all_new_columns = []
         all_lease_df = {}
-        all_current_liabilities_df = {}
+        current_liabilities_dfs = {}
         _10k_fpaths = [os.path.join(dir_ticker, fname)
                        for fname in os.listdir(dir_ticker) if fname.split(".")[
                            -1] == "xlsx"]
@@ -133,34 +133,35 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
 
                 df_data = parse_data_from_sheet(
                     df_10k_per_sheet, sheet, data_list, year)
-                new_columns = df_data.index.values
                 all_df_data.append(df_data)
-                all_new_columns.extend(new_columns)
-            # pp.pprint(all_df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_df[year] = lease_df
             current_liabilities_df = get_current_liabilities_df(
                 df_10k_per_sheet, year)
-            all_current_liabilities_df[year] = current_liabilities_df
+            current_liabilities_dfs[year] = current_liabilities_df
 
             dict_data_year[year] = all_df_data_concat
 
         list_data_year = []
         for year in sorted(dict_data_year.keys(), reverse=True):
-            print(year)
             list_data_year.append(dict_data_year[year])
-
         df_output = pd.concat(list_data_year, axis=1, join="outer")
         df_output.columns = list(years)[::-1]
 
-        # columns_renaming = dict(zip(df_output.columns, years))
-        # df_output = df_output.rename(columns=columns_renaming)
+        list_current_liabilities = []
+        for year in sorted(current_liabilities_dfs.keys(), reverse=True):
+            list_current_liabilities.append(current_liabilities_dfs[year])
+        merged_current_liabilities_df = reduce(lambda left, right: pd.merge(
+            left, right, on=["title"], how="outer"), list_current_liabilities)
+
+        # merged_current_liabilities_df = pd.concat(
+        #     list_current_liabilities, axis=1, join="outer")
+
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
-        with pd.ExcelWriter(os.path.join(
-                dir_ticker, "all_current_liabilities_df.xlsx")) as writer:
-            for year, df in all_current_liabilities_df.items():
-                df.to_excel(writer, sheet_name=year)
+        df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
+        merged_current_liabilities_df.to_csv(os.path.join(
+            dir_ticker, "current_liabilities.csv"))
         with pd.ExcelWriter(os.path.join(dir_ticker,
                                          "all_lease_df.xlsx")) as writer:
             for year, df in all_lease_df.items():
@@ -243,7 +244,10 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
             sum_current_liabilities += row[year_col]*start
     """
     selected_sheet = sheet_df.iloc[first_i:last_i+1]
-    return selected_sheet[[first_col, year_col]]
+    return_sheet = selected_sheet[[first_col, year_col]]
+    return_sheet = return_sheet.rename(columns={first_col: "title"})
+
+    return return_sheet
 
 
 def clean_df(df_per_sheet, year):
