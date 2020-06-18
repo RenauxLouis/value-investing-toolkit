@@ -296,8 +296,7 @@ def clean_df(df_per_sheet, year):
                 if str_add:
                     titles.append("(" + str_add + ") " + row_v)
                     if isinstance(row_v, str) and (
-                        "total" in row_v.lower()) and (
-                            str_add in row_v):
+                            "total" in row_v.lower()):
                         str_add = ""
                 else:
                     titles.append(row_v)
