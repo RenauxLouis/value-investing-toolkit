@@ -167,8 +167,6 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
 
 
 def get_lease_df(df_10k_per_sheet, year):
-    print(df_10k_per_sheet.keys())
-    sys.exit()
     list_r = ["operating", "lease"]
     keys_array = np.array(list(df_10k_per_sheet.keys()))
     keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
