@@ -25,6 +25,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
     filing_type = "10-K"
     count = 5
     for ticker, cik in ciks_per_ticker.items():
+        print(ticker)
         ticker_folder = os.path.join(dl_folder, ticker)
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
@@ -62,8 +63,10 @@ def download_10k_htm(cik, accession_number, ticker_folder, year):
         soup = BeautifulSoup(data, features="lxml")
         links = [link.get("href") for link in soup.findAll("a")]
         htm_urls = [link for link in links if (
-            link.split(".")[-1] == "htm" and "10k" in link)]
-        assert len(htm_urls) == 1
+            link.split(".")[-1] == "htm" and ("10-k" in link or "10k" in link))]
+
+        # TODO
+        # Find a better method to pick the correct htm (can't get cik V)
         htm_fname = os.path.basename(htm_urls[0])
         htm_url = os.path.join(accession_number_url, htm_fname)
         r_htm = requests.get(htm_url)
