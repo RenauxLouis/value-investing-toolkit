@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import reduce
 from shutil import rmtree
-
+import nltk.data
 import numpy as np
 import pandas as pd
 import requests
@@ -16,6 +16,8 @@ from bs4 import BeautifulSoup
 from utils import create_document_list, get_cik, save_in_directory
 
 pp = pprint.PrettyPrinter(indent=4)
+nltk.download('punkt')
+tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 
 def download_10k(ciks_per_ticker, priorto, years, dl_folder):
@@ -75,7 +77,7 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
     for ticker in tickers:
         dir_ticker = os.path.join(dl_folder, ticker)
         dict_data_year = {}
-        all_lease_df = {}
+        all_lease_dfs = {}
         current_liabilities_dfs = {}
         _10k_fpaths = [os.path.join(dir_ticker, fname)
                        for fname in os.listdir(dir_ticker) if fname.split(".")[
@@ -136,10 +138,9 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
                 all_df_data.append(df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
-            all_lease_df[year] = lease_df
-            current_liabilities_df = get_current_liabilities_df(
+            all_lease_dfs[year] = lease_df
+            current_liabilities_dfs[year] = get_current_liabilities_df(
                 df_10k_per_sheet, year)
-            current_liabilities_dfs[year] = current_liabilities_df
 
             dict_data_year[year] = all_df_data_concat
 
@@ -155,15 +156,20 @@ def select_data(tickers, years, naming_income_statement, dl_folder):
         merged_current_liabilities_df = reduce(lambda left, right: pd.merge(
             left, right, on=["title"], how="outer"), list_current_liabilities)
 
-        df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
+        list_future_lease = []
+        for year in sorted(all_lease_dfs.keys(), reverse=True):
+            list_future_lease.append(all_lease_dfs[year])
+        df_output_lease = pd.concat(list_future_lease, axis=1, join="outer")
+
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
         merged_current_liabilities_df.to_csv(os.path.join(
             dir_ticker, "current_liabilities.csv"))
-        with pd.ExcelWriter(os.path.join(dir_ticker,
-                                         "all_lease_df.xlsx")) as writer:
-            for year, df in all_lease_df.items():
-                if df is not None:
-                    df.to_excel(writer, sheet_name=year)
+        df_output_lease.to_csv(os.path.join(dir_ticker, "future_lease.csv"))
+        # with pd.ExcelWriter(os.path.join(dir_ticker,
+        #                                  "all_lease_df.xlsx")) as writer:
+        #     for year, df in all_lease_df.items():
+        #         if df is not None:
+        #             df.to_excel(writer, sheet_name=year)
 
 
 def get_lease_df(df_10k_per_sheet, year):
@@ -176,7 +182,36 @@ def get_lease_df(df_10k_per_sheet, year):
     if selected_key.size > 0:
         return df_10k_per_sheet[selected_key[0]]
     else:
-        return None
+        return find_lease_commitments_and_contingencies(
+            df_10k_per_sheet, year)
+
+
+def find_lease_commitments_and_contingencies(df_10k_per_sheet, year):
+    list_r = ["commitments", "contingencies"]
+    keys_array = np.array(list(df_10k_per_sheet.keys()))
+    keys = [key.split(" ") for key in df_10k_per_sheet.keys()]
+    match_keys = np.array(list(map(functools.partial(
+        regex_per_word, list_r=list_r), keys)))
+    selected_key = keys_array[match_keys]
+    if selected_key.size > 0:
+        selected_df = df_10k_per_sheet[selected_key[0]]
+        r = re.compile(".*" + year)
+        year_col_list = list(
+            filter(r.match, selected_df.columns))
+        assert len(year_col_list) == 1
+        year_col = year_col_list[0]
+
+        full_texts = selected_df[year_col].fillna("").values
+        select_text = max(full_texts, key=len)
+        sentences = tokenizer.tokenize(select_text)
+        sentences_lease = [
+            sentence for sentence in sentences if "lease" in sentence]
+
+        data = [[" ".join(sentences_lease)]]
+        output_df = pd.DataFrame(data, columns=[year])
+
+        return output_df
+    return None
 
 
 def get_current_liabilities_df(df_10k_per_sheet, year):
