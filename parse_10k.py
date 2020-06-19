@@ -24,6 +24,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
     filing_type = "10-K"
     count = 5
+    valid_years_per_ticker = {}
     for ticker, cik in ciks_per_ticker.items():
         print(ticker)
         ticker_folder = os.path.join(dl_folder, ticker)
@@ -46,6 +47,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             try:
                 valid_years = save_in_directory(ticker_folder, cik, priorto,
                                                 url_fr_per_year)
+                valid_years_per_ticker[ticker] = valid_years
             except Exception as e:
                 sys.exit(e)
 
@@ -53,7 +55,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 download_10k_htm(cik, accession_number,
                                  ticker_folder, year)
 
-    return valid_years
+    return valid_years_per_ticker
 
 
 def download_10k_htm(cik, accession_number, ticker_folder, year):
@@ -78,9 +80,11 @@ def download_10k_htm(cik, accession_number, ticker_folder, year):
             output.write(r_htm.content)
 
 
-def select_data(tickers, years, naming_income_statement, dl_folder):
+def select_data(tickers, valid_years_per_ticker,
+                naming_income_statement, dl_folder):
 
     for ticker in tickers:
+        years = valid_years_per_ticker[ticker.lower()]
         dir_ticker = os.path.join(dl_folder, ticker)
         dict_data_year = {}
         all_lease_dfs = {}
@@ -444,8 +448,9 @@ def main(tickers_csv_fpath, naming_income_statement):
     last_year = int(priorto[:4]) - 1
     years = range(last_year-4, last_year+1)
 
-    valid_years = download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, valid_years, naming_income_statement, dl_folder)
+    valid_years_per_ticker = download_10k(ciks, priorto, years, dl_folder)
+    select_data(tickers, valid_years_per_ticker,
+                naming_income_statement, dl_folder)
 
 
 def parse_args():
