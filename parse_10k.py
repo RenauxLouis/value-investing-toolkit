@@ -44,13 +44,16 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 url_fr_per_year[year] = urls[i]
 
             try:
-                save_in_directory(ticker_folder, cik, priorto, url_fr_per_year)
+                valid_years = save_in_directory(ticker_folder, cik, priorto,
+                                                url_fr_per_year)
             except Exception as e:
                 sys.exit(e)
 
             for accession_number, year in zip(accession_numbers, years[::-1]):
                 download_10k_htm(cik, accession_number,
                                  ticker_folder, year)
+
+    return valid_years
 
 
 def download_10k_htm(cik, accession_number, ticker_folder, year):
@@ -441,8 +444,8 @@ def main(tickers_csv_fpath, naming_income_statement):
     last_year = int(priorto[:4]) - 1
     years = range(last_year-4, last_year+1)
 
-    download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, years, naming_income_statement, dl_folder)
+    valid_years = download_10k(ciks, priorto, years, dl_folder)
+    select_data(tickers, valid_years, naming_income_statement, dl_folder)
 
 
 def parse_args():
