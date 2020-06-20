@@ -26,7 +26,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
     count = 5
     valid_years_per_ticker = {}
     for ticker, cik in ciks_per_ticker.items():
-        print(ticker)
+        print("Ticker: ", ticker)
         ticker_folder = os.path.join(dl_folder, ticker)
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
@@ -54,7 +54,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             for accession_number, year in zip(accession_numbers, years[::-1]):
                 download_10k_htm(cik, accession_number,
                                  ticker_folder, year)
-
+    print(valid_years_per_ticker)
     return valid_years_per_ticker
 
 
@@ -141,10 +141,10 @@ def select_data(tickers, valid_years_per_ticker,
             print("All needed sheet are found in the 10k document")
 
             all_df_data = []
-            for sheet, data_list in data_per_sheet.items():
-
+            for target_sheet, data_list in data_per_sheet.items():
+                print(target_sheet)
                 df_data = parse_data_from_sheet(
-                    df_10k_per_sheet, sheet, data_list, year)
+                    df_10k_per_sheet, target_sheet, data_list, year)
                 all_df_data.append(df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
@@ -321,28 +321,23 @@ def clean_df(df_per_sheet, year):
     return df_per_sheet_title
 
 
-def find_sheet(df_10k_per_sheet, sheet):
-
-    r = re.compile(".*" + sheet)
-    keys_couples = [(key, key.lower()) for key in df_10k_per_sheet.keys()]
-    match_back = dict(zip([keys_couple[
-        1] for keys_couple in keys_couples], [keys_couple[
-            0] for keys_couple in keys_couples]))
-    output = list(filter(r.match, [keys_couple[
-        1] for keys_couple in keys_couples]))
-    if len(output):
-        # TODO: Find a correct way to select the sheet
-        return df_10k_per_sheet[match_back[output[0]]]
-    return []
-
-
 def clean_col_and_multiplier(sheet_df, year):
 
     r = re.compile(".*" + year)
     year_col_list = list(
         filter(r.match, sheet_df.columns))
-    assert len(year_col_list) == 1
-    year_col = year_col_list[0]
+    if len(year_col_list) == 0:
+        next_year = str(int(year)+1)
+        r = re.compile(".*" + next_year)
+        year_col_list_one = list(
+            filter(r.match, sheet_df.columns))
+        if len(year_col_list_one):
+            print(f"End of year {year} in the start of year {next_year}")
+            year_col = year_col_list_one[0]
+        else:
+            sys.exit("Correct year {year} not found")
+    elif len(year_col_list) == 1:
+        year_col = year_col_list[0]
 
     # Get multiplier
     # TODO
@@ -360,11 +355,12 @@ def clean_col_and_multiplier(sheet_df, year):
     return sheet_df, first_col, year_col, multiplier
 
 
-def parse_data_from_sheet(df_10k_per_sheet, sheet, data_list, year):
+def parse_data_from_sheet(df_10k_per_sheet, target_sheet, data_list, year):
 
     dict_data = {}
-    sheet_key = regex_per_word_wrapper(sheet, df_10k_per_sheet.keys())
+    sheet_key = regex_per_word_wrapper(target_sheet, df_10k_per_sheet.keys())
     sheet_df = df_10k_per_sheet[sheet_key]
+    print(sheet_key)
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
 
