@@ -463,6 +463,7 @@ def regex_per_word(match, list_r):
 def main(tickers_csv_fpath):
 
     dl_folder = "10k_data"
+    os.makedirs(dl_folder, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
           " ".join(tickers))
     ciks = get_cik(tickers)
