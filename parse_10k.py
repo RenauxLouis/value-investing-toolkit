@@ -111,7 +111,10 @@ def get_lease_df(df_10k_per_sheet, year):
     selected_key = keys_array[match_keys]
     if selected_key.size > 0:
         df = df_10k_per_sheet[selected_key[0]]
-        return df[[*df.columns[:2]]]
+        df, first_col, year_col, multiplier = clean_col_and_multiplier(
+            df, year)
+        df[year_col] = df[year_col]*multiplier
+        return df[[first_col, year_col]]
     else:
         return find_lease_commitments_and_contingencies(
             df_10k_per_sheet, year)
