@@ -169,9 +169,10 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_dfs[year] = lease_df
-            current_liabilities_dfs[year] = get_current_liabilities_df(
+            current_liabilities_df = get_current_liabilities_df(
                 df_10k_per_sheet, year)
-
+            if current_liabilities_df is not None:
+                current_liabilities_dfs[year] = current_liabilities_df
             dict_data_year[year] = all_df_data_concat
 
         list_data_year = []
@@ -183,8 +184,13 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
         list_current_liabilities = []
         for year in sorted(current_liabilities_dfs.keys(), reverse=True):
             list_current_liabilities.append(current_liabilities_dfs[year])
-        merged_current_liabilities_df = reduce(lambda left, right: pd.merge(
-            left, right, on=["title"], how="outer"), list_current_liabilities)
+        if list_current_liabilities:
+            merged_current_liabilities_df = reduce(
+                lambda left, right: pd.merge(
+                    left, right, on=["title"], how="outer"),
+                list_current_liabilities)
+            merged_current_liabilities_df.to_csv(os.path.join(
+                dir_ticker, "current_liabilities.csv"))
 
         list_future_lease = []
         for year in sorted(all_lease_dfs.keys(), reverse=True):
@@ -192,14 +198,7 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
         df_output_lease = pd.concat(list_future_lease, axis=1, join="outer")
 
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
-        merged_current_liabilities_df.to_csv(os.path.join(
-            dir_ticker, "current_liabilities.csv"))
         df_output_lease.to_csv(os.path.join(dir_ticker, "future_lease.csv"))
-        # with pd.ExcelWriter(os.path.join(dir_ticker,
-        #                                  "all_lease_df.xlsx")) as writer:
-        #     for year, df in all_lease_df.items():
-        #         if df is not None:
-        #             df.to_excel(writer, sheet_name=year)
 
 
 def get_lease_df(df_10k_per_sheet, year):
@@ -254,6 +253,8 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     sheet_df = sheet_df.dropna(subset=[first_col])
     sheet_df["mask_col"] = sheet_df[first_col].apply(
         lambda match: regex_per_word(match.split(" "), list_r))
+    if not sheet_df["mask_col"].any():
+        return None
     first_current_liabilities_row = sheet_df[sheet_df["mask_col"]
                                              ][[first_col, year_col]].iloc[0]
     assert np.isnan(first_current_liabilities_row[year_col])
@@ -263,6 +264,8 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     sheet_df = sheet_df.dropna(subset=[first_col])
     sheet_df["mask_col"] = sheet_df[first_col].apply(
         lambda match: regex_per_word(match.split(" "), list_r))
+    if not sheet_df["mask_col"].any():
+        return None
     last_current_liabilities_row = sheet_df[
         sheet_df["mask_col"]][[first_col, year_col]].iloc[-1]
     last_i = last_current_liabilities_row.name
