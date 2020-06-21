@@ -83,7 +83,8 @@ def download_10k_htm(cik, accession_number, ticker_folder, year):
 
 def find_income_statement(df_10k_per_sheet):
     df_10k_keys = df_10k_per_sheet.keys()
-    list_possibles = ["statement income", "statement earning"]
+    list_possibles = ["statement income", "statement earning",
+                      "statement operation"]
     list_indexes = []
     sheet_per_index = {}
     for possible in list_possibles:
@@ -133,7 +134,6 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
             # "statements of operations" or "income statement"
 
             income_statement_name = find_income_statement(df_10k_per_sheet)
-            print("###income_statement_name : ", income_statement_name)
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
                                   "cash and cash equivalents",
@@ -157,7 +157,6 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
                 if not len(selected_sheet):
                     print("####", sheet, "not found")
                     sys.exit()
-            print("All needed sheet are found in the 10k document")
 
             all_df_data = []
             for target_sheet, data_list in data_per_sheet.items():
