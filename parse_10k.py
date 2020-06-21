@@ -116,7 +116,6 @@ def get_lease_df(df_10k_per_sheet, year):
         df[year_col] = df[year_col].apply(
             lambda x: x*multiplier if (isinstance(
                 x, float) or isinstance(x, int)) else x)
-
         return df[[first_col, year_col]]
     else:
         return find_lease_commitments_and_contingencies(
@@ -283,7 +282,8 @@ def clean_col_and_multiplier(sheet_df, year):
     elif "thousands" in first_col.lower():
         multiplier = 1000
 
-    sheet_df[first_col] = sheet_df[first_col].str.lower()
+    sheet_df[first_col] = sheet_df[first_col].apply(
+        lambda x: x.lower() if isinstance(x, str) else x)
     return sheet_df, first_col, year_col, multiplier
 
 
