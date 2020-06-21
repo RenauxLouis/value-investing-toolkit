@@ -1,19 +1,20 @@
 import argparse
+import datetime
 import functools
 import os
 import pprint
 import re
 import sys
-import datetime
 from functools import reduce
 from shutil import rmtree
-from yahoo_fin import stock_info as si
+
 import nltk.data
 import numpy as np
 import pandas as pd
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
+from yahoo_fin import stock_info as si
 
 from utils import create_document_list, get_cik, save_in_directory
 
