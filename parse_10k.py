@@ -68,7 +68,8 @@ def download_10k_htm(cik, accession_number, ticker_folder, year):
         soup = BeautifulSoup(data, features="lxml")
         links = [link.get("href") for link in soup.findAll("a")]
         htm_urls = [link for link in links if (
-            link.split(".")[-1] == "htm" and ("10-k" in link or "10k" in link))]
+            link.split(".")[-1] == "htm" and (
+                "10-k" in link or "10k" in link))]
 
         # TODO
         # Find a better method to pick the correct htm (can't get cik V)
@@ -88,9 +89,10 @@ def find_income_statement(df_10k_per_sheet):
     for possible in list_possibles:
         selected_sheet = regex_per_word_wrapper(
             possible, df_10k_keys)
-        index = list(df_10k_keys).index(selected_sheet)
-        list_indexes.append(index)
-        sheet_per_index[index] = selected_sheet
+        if selected_sheet:
+            index = list(df_10k_keys).index(selected_sheet)
+            list_indexes.append(index)
+            sheet_per_index[index] = selected_sheet
 
     selected_index = min(list_indexes)
     return sheet_per_index[selected_index]
@@ -161,7 +163,8 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
             for target_sheet, data_list in data_per_sheet.items():
                 print(target_sheet)
                 df_data = parse_data_from_sheet(income_statement_name,
-                                                df_10k_per_sheet, target_sheet, data_list, year)
+                                                df_10k_per_sheet, target_sheet,
+                                                data_list, year)
                 all_df_data.append(df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
@@ -256,12 +259,12 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     assert np.isnan(first_current_liabilities_row[year_col])
     first_i = first_current_liabilities_row.name
 
-    list_r = ["total", "current", "liabilities"]
+    list_r = ["current", "liabilities"]
     sheet_df = sheet_df.dropna(subset=[first_col])
     sheet_df["mask_col"] = sheet_df[first_col].apply(
         lambda match: regex_per_word(match.split(" "), list_r))
-    last_current_liabilities_row = sheet_df[sheet_df["mask_col"]
-                                            ][[first_col, year_col]].iloc[0]
+    last_current_liabilities_row = sheet_df[
+        sheet_df["mask_col"]][[first_col, year_col]].iloc[-1]
     last_i = last_current_liabilities_row.name
 
     selected_sheet = sheet_df.iloc[first_i:last_i+1]
@@ -314,8 +317,7 @@ def clean_df(df_per_sheet, year):
         if year in year_col:
             try:
                 df["isnull"] = df[year_col].isnull()
-            except Exception as e:
-                # print(e)
+            except Exception:
                 continue
             str_add = ""
             titles = [df.loc[0, title]]
