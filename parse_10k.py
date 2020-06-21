@@ -102,107 +102,6 @@ def find_income_statement(df_10k_per_sheet):
     return sheet_per_index[selected_index]
 
 
-def select_data(tickers, valid_years_per_ticker, dl_folder):
-
-    for ticker in tickers:
-        years = valid_years_per_ticker[ticker.lower()]
-        dir_ticker = os.path.join(dl_folder, ticker)
-        dict_data_year = {}
-        all_lease_dfs = {}
-        current_liabilities_dfs = {}
-        _10k_fpaths = [os.path.join(dir_ticker, fname)
-                       for fname in os.listdir(dir_ticker) if fname.split(".")[
-                           -1] == "xlsx"]
-        for _10k_fpath in _10k_fpaths:
-            print(_10k_fpath)
-            year = _10k_fpath.split(".")[0][-4:]
-            print("Selecting data from", year)
-
-            df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
-            df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
-
-            # pp.pprint(list(df_10k_per_sheet.keys()))
-            # TODO
-            # Find if that split makes sense for other tickers
-            # May need to pull first column instead of sheet title
-
-            # TODO
-            # Make sure the currency is correct
-
-            # TODO
-            # Fix hack weightedaverage
-
-            # TODO
-            # Are positive/negative values ok
-            # "statements of operations" or "income statement"
-
-            income_statement_name = find_income_statement(df_10k_per_sheet)
-            data_per_sheet = {
-                "balance sheet": ["total assets", "total liabilities",
-                                  "cash and cash equivalents",
-                                  "property equipment", "equity",
-                                  "goodwill", "intangible assets", "debt"],
-                income_statement_name: ["operating income",
-                                        "operating profit",
-                                        "weightedaverage",
-                                        "weighted average",
-                                        "net income", "interest expense",
-                                        "per share", "dividend"],
-                "statements cash flows": ["cash operating", "cash operation"]
-            }
-
-            # Check if all match
-            for sheet, data_list in data_per_sheet.items():
-                if sheet == income_statement_name:
-                    continue
-                selected_sheet = regex_per_word_wrapper(
-                    sheet, df_10k_per_sheet.keys())
-                if not len(selected_sheet):
-                    print("####", sheet, "not found")
-                    sys.exit()
-
-            all_df_data = []
-            for target_sheet, data_list in data_per_sheet.items():
-                print(target_sheet)
-                df_data = parse_data_from_sheet(income_statement_name,
-                                                df_10k_per_sheet, target_sheet,
-                                                data_list, year)
-                all_df_data.append(df_data)
-            all_df_data_concat = pd.concat(all_df_data)
-            lease_df = get_lease_df(df_10k_per_sheet, year)
-            all_lease_dfs[year] = lease_df
-            current_liabilities_df = get_current_liabilities_df(
-                df_10k_per_sheet, year)
-            if current_liabilities_df is not None:
-                current_liabilities_dfs[year] = current_liabilities_df
-            dict_data_year[year] = all_df_data_concat
-
-        list_data_year = []
-        for year in sorted(dict_data_year.keys(), reverse=True):
-            list_data_year.append(dict_data_year[year])
-        df_output = pd.concat(list_data_year, axis=1, join="outer")
-        df_output.columns = list(years)[::-1]
-
-        list_current_liabilities = []
-        for year in sorted(current_liabilities_dfs.keys(), reverse=True):
-            list_current_liabilities.append(current_liabilities_dfs[year])
-        if list_current_liabilities:
-            merged_current_liabilities_df = reduce(
-                lambda left, right: pd.merge(
-                    left, right, on=["title"], how="outer"),
-                list_current_liabilities)
-            merged_current_liabilities_df.to_csv(os.path.join(
-                dir_ticker, "current_liabilities.csv"))
-
-        list_future_lease = []
-        for year in sorted(all_lease_dfs.keys(), reverse=True):
-            list_future_lease.append(all_lease_dfs[year])
-        df_output_lease = pd.concat(list_future_lease, axis=1, join="outer")
-
-        df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
-        df_output_lease.to_csv(os.path.join(dir_ticker, "future_lease.csv"))
-
-
 def get_lease_df(df_10k_per_sheet, year):
     list_r = ["operating", "lease"]
     keys_array = np.array(list(df_10k_per_sheet.keys()))
@@ -477,6 +376,109 @@ def main(tickers_csv_fpath):
 
     valid_years_per_ticker = download_10k(ciks, priorto, years, dl_folder)
     select_data(tickers, valid_years_per_ticker, dl_folder)
+
+
+
+
+def select_data(tickers, valid_years_per_ticker, dl_folder):
+
+    for ticker in tickers:
+        years = valid_years_per_ticker[ticker.lower()]
+        dir_ticker = os.path.join(dl_folder, ticker)
+        dict_data_year = {}
+        all_lease_dfs = {}
+        current_liabilities_dfs = {}
+        _10k_fpaths = [os.path.join(dir_ticker, fname)
+                       for fname in os.listdir(dir_ticker) if fname.split(".")[
+                           -1] == "xlsx"]
+        for _10k_fpath in _10k_fpaths:
+            print(_10k_fpath)
+            year = _10k_fpath.split(".")[0][-4:]
+            print("Selecting data from", year)
+
+            df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
+            df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
+
+            # pp.pprint(list(df_10k_per_sheet.keys()))
+            # TODO
+            # Find if that split makes sense for other tickers
+            # May need to pull first column instead of sheet title
+
+            # TODO
+            # Make sure the currency is correct
+
+            # TODO
+            # Fix hack weightedaverage
+
+            # TODO
+            # Are positive/negative values ok
+            # "statements of operations" or "income statement"
+
+            income_statement_name = find_income_statement(df_10k_per_sheet)
+            data_per_sheet = {
+                "balance sheet": ["total assets", "total liabilities",
+                                  "cash and cash equivalents",
+                                  "property equipment", "equity",
+                                  "goodwill", "intangible assets", "debt"],
+                income_statement_name: ["operating income",
+                                        "operating profit",
+                                        "weightedaverage",
+                                        "weighted average",
+                                        "net income", "interest expense",
+                                        "per share", "dividend"],
+                "statements cash flows": ["cash operating", "cash operation"]
+            }
+
+            # Check if all match
+            for sheet, data_list in data_per_sheet.items():
+                if sheet == income_statement_name:
+                    continue
+                selected_sheet = regex_per_word_wrapper(
+                    sheet, df_10k_per_sheet.keys())
+                if not len(selected_sheet):
+                    print("####", sheet, "not found")
+                    sys.exit()
+
+            all_df_data = []
+            for target_sheet, data_list in data_per_sheet.items():
+                print(target_sheet)
+                df_data = parse_data_from_sheet(income_statement_name,
+                                                df_10k_per_sheet, target_sheet,
+                                                data_list, year)
+                all_df_data.append(df_data)
+            all_df_data_concat = pd.concat(all_df_data)
+            lease_df = get_lease_df(df_10k_per_sheet, year)
+            all_lease_dfs[year] = lease_df
+            current_liabilities_df = get_current_liabilities_df(
+                df_10k_per_sheet, year)
+            if current_liabilities_df is not None:
+                current_liabilities_dfs[year] = current_liabilities_df
+            dict_data_year[year] = all_df_data_concat
+
+        list_data_year = []
+        for year in sorted(dict_data_year.keys(), reverse=True):
+            list_data_year.append(dict_data_year[year])
+        df_output = pd.concat(list_data_year, axis=1, join="outer")
+        df_output.columns = years
+
+        list_current_liabilities = []
+        for year in sorted(current_liabilities_dfs.keys(), reverse=True):
+            list_current_liabilities.append(current_liabilities_dfs[year])
+        if list_current_liabilities:
+            merged_current_liabilities_df = reduce(
+                lambda left, right: pd.merge(
+                    left, right, on=["title"], how="outer"),
+                list_current_liabilities)
+            merged_current_liabilities_df.to_csv(os.path.join(
+                dir_ticker, "current_liabilities.csv"))
+
+        list_future_lease = []
+        for year in sorted(all_lease_dfs.keys(), reverse=True):
+            list_future_lease.append(all_lease_dfs[year])
+        df_output_lease = pd.concat(list_future_lease, axis=1, join="outer")
+
+        df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
+        df_output_lease.to_csv(os.path.join(dir_ticker, "future_lease.csv"))
 
 
 def parse_args():
