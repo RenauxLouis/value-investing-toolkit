@@ -35,7 +35,7 @@ def create_document_list(data):
 
     accession_numbers = [link.split("/")[-2] for link in link_list]
     print("Number of files to download: {0}".format(len(link_list)))
-    print("Starting download...")
+    print("Downloading...")
 
     # List of url to the text documents
     fr_urls = [os.path.join(os.path.dirname(
@@ -60,12 +60,14 @@ def save_in_directory(company_code, cik, priorto, url_fr_per_year):
             None
     """
 
+    valid_years = []
     for year, url in url_fr_per_year.items():
         year_str = str(year)
-        print(url)
         r = requests.get(url)
-
-        os.makedirs(company_code, exist_ok=True)
-        fpath = os.path.join(company_code, f"10k_{year_str}.xlsx")
-        with open(fpath, "wb") as output:
-            output.write(r.content)
+        if r.status_code == 200:
+            valid_years.append(year)
+            os.makedirs(company_code, exist_ok=True)
+            fpath = os.path.join(company_code, f"10k_{year_str}.xlsx")
+            with open(fpath, "wb") as output:
+                output.write(r.content)
+    return valid_years

@@ -463,8 +463,6 @@ def regex_per_word(match, list_r):
 def main(tickers_csv_fpath):
 
     dl_folder = "10k_data"
-    tickers_df = pd.read_csv(tickers_csv_fpath)
-    tickers = tickers_df["ticker"]
     print("Parsing the last 5 10K documents from tickers:",
           " ".join(tickers))
     ciks = get_cik(tickers)
@@ -482,6 +480,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Preprocessing Pipeline")
     parser.add_argument(
+        "--tickers",
+        nargs="+")
+    parser.add_argument(
         "--tickers_csv_fpath",
         type=str,
         default="list_tickers.csv")
@@ -493,4 +494,10 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    main(args.tickers_csv_fpath)
+    if args.tickers:
+        tickers = args.tickers
+    else:
+        tickers_df = pd.read_csv(args.tickers_csv_fpath)
+        tickers = tickers_df["ticker"]
+
+    main(tickers)
