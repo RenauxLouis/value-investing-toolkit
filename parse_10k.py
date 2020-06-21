@@ -54,6 +54,8 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             for accession_number, year in zip(accession_numbers, years[::-1]):
                 download_10k_htm(cik, accession_number,
                                  ticker_folder, year)
+        else:
+            sys.exit("Ticker data not found")
 
     return valid_years_per_ticker
 
@@ -61,7 +63,8 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 def download_10k_htm(cik, accession_number, ticker_folder, year):
     year_str = str(year)
     base_edgar_url = "https://www.sec.gov/Archives/edgar/data"
-    accession_number_url = os.path.join(base_edgar_url, cik, accession_number)
+    accession_number_url = os.path.join(
+        base_edgar_url, cik, accession_number).replace("\\", "/")
     r = requests.get(accession_number_url)
     if r.status_code == 200:
         data = r.text

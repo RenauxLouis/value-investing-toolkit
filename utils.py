@@ -39,7 +39,8 @@ def create_document_list(data):
 
     # List of url to the text documents
     fr_urls = [os.path.join(os.path.dirname(
-        link), "Financial_Report.xlsx") for link in link_list]
+        link), "Financial_Report.xlsx").replace(
+            "\\", "/") for link in link_list]
 
     return fr_urls, accession_numbers
 
