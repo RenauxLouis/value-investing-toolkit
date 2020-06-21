@@ -4,15 +4,15 @@ import os
 import pprint
 import re
 import sys
-from datetime import datetime
+import datetime
 from functools import reduce
 from shutil import rmtree
-
+from yahoo_fin import stock_info as si
 import nltk.data
 import numpy as np
 import pandas as pd
 import requests
-import spacy
+import yfinance as yf
 from bs4 import BeautifulSoup
 
 from utils import create_document_list, get_cik, save_in_directory
@@ -192,7 +192,7 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     return_sheet[year_col] = return_sheet[year_col]*multiplier
     return_sheet = return_sheet.rename(columns={first_col: "title"})
 
-    return return_sheet
+    return return_sheet, year_col
 
 
 def clean_df(df_per_sheet, year):
@@ -372,7 +372,7 @@ def regex_per_word(match, list_r):
     return False
 
 
-def main(tickers_csv_fpath):
+def main(tickers):
 
     dl_folder = "10k_data"
     os.makedirs(dl_folder, exist_ok=True)
@@ -380,15 +380,21 @@ def main(tickers_csv_fpath):
           " ".join(tickers))
     ciks = get_cik(tickers)
 
-    priorto = datetime.today().strftime("%Y%m%d")
+    today_stock_per_ticker = {}
+    for ticker in tickers:
+        today_stock_per_ticker[ticker] = round(si.get_live_price(ticker), 2)
+    priorto = datetime.datetime.today().strftime("%Y%m%d")
+
     last_year = int(priorto[:4]) - 1
     years = range(last_year-4, last_year+1)
 
     valid_years_per_ticker = download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, valid_years_per_ticker, dl_folder)
+    select_data(tickers, valid_years_per_ticker,
+                dl_folder, today_stock_per_ticker)
 
 
-def select_data(tickers, valid_years_per_ticker, dl_folder):
+def select_data(tickers, valid_years_per_ticker, dl_folder,
+                today_stock_per_ticker):
 
     for ticker in tickers:
         years = valid_years_per_ticker[ticker.lower()]
@@ -396,6 +402,7 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
         dict_data_year = {}
         all_lease_dfs = {}
         current_liabilities_dfs = {}
+        stock_price_per_year = {}
         _10k_fpaths = [os.path.join(dir_ticker, fname)
                        for fname in os.listdir(dir_ticker) if fname.split(".")[
                            -1] == "xlsx"]
@@ -454,11 +461,12 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
                                                 df_10k_per_sheet, target_sheet,
                                                 data_list, year)
                 all_df_data.append(df_data)
-            all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_dfs[year] = lease_df
-            current_liabilities_df = get_current_liabilities_df(
+            current_liabilities_df, year_col = get_current_liabilities_df(
                 df_10k_per_sheet, year)
+            all_df_data_concat = pd.concat(all_df_data)
+            stock_price_per_year[year] = get_stock_price(year_col, ticker)
             if current_liabilities_df is not None:
                 current_liabilities_dfs[year] = current_liabilities_df
             dict_data_year[year] = all_df_data_concat
@@ -468,6 +476,8 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
             list_data_year.append(dict_data_year[year])
         df_output = pd.concat(list_data_year, axis=1, join="outer")
         df_output.columns = years
+
+        stock_price_per_year["now"] = today_stock_per_ticker[ticker]
 
         list_current_liabilities = []
         for year in sorted(current_liabilities_dfs.keys(), reverse=True):
@@ -479,14 +489,49 @@ def select_data(tickers, valid_years_per_ticker, dl_folder):
                 list_current_liabilities)
             merged_current_liabilities_df.to_csv(os.path.join(
                 dir_ticker, "current_liabilities.csv"))
-
         list_future_lease = []
         for year in sorted(all_lease_dfs.keys(), reverse=True):
             list_future_lease.append(all_lease_dfs[year])
         df_output_lease = pd.concat(list_future_lease, axis=1, join="outer")
 
+        df_stock_prices = pd.DataFrame.from_dict(
+            stock_price_per_year, orient="index").T
+        cols = list(df_stock_prices.columns)
+        cols.remove("now")
+        int_col_ordered = sorted(cols, reverse=True)
+        df_stock_prices = df_stock_prices[["now", *int_col_ordered]]
+
         df_output.to_csv(os.path.join(dir_ticker, "selected_data.csv"))
         df_output_lease.to_csv(os.path.join(dir_ticker, "future_lease.csv"))
+        df_stock_prices.to_csv(os.path.join(dir_ticker, "stock_prices.csv"))
+
+
+def get_stock_price(year_col, ticker):
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    year = year_col[-4:]
+    rest = "".join(filter(str.isalnum, year_col.replace(year, "")))
+    match_month = [month for month in months if month in rest]
+    assert len(match_month) == 1
+    month_name = "".join(filter(str.isalnum, match_month[0]))
+    day = rest.replace(month_name, "")
+    month = str(months.index(month_name) + 1)
+    start_date = "-".join([year, month, day])
+
+    one_day = datetime.timedelta(days=1)
+    start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = start_date + one_day
+
+    stock_price = 0
+    while not stock_price:
+        stock_df = yf.download(ticker, start_date, end_date)
+        if len(stock_df):
+            stock_price = round(stock_df["Close"].values[0], 2)
+        else:
+            start_date = start_date - one_day
+            end_date = end_date - one_day
+
+    return stock_price
 
 
 def parse_args():
