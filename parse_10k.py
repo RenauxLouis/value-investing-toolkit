@@ -440,6 +440,7 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
                                         "operating profit",
                                         "weightedaverage",
                                         "weighted average",
+                                        "income tax", "income taxes",
                                         "net income", "interest expense",
                                         "per share", "dividend"],
                 "statements cash flows": ["cash operating", "cash operation"]
