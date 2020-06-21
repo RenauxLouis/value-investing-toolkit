@@ -110,7 +110,8 @@ def get_lease_df(df_10k_per_sheet, year):
         regex_per_word, list_r=list_r), keys)))
     selected_key = keys_array[match_keys]
     if selected_key.size > 0:
-        return df_10k_per_sheet[selected_key[0]]
+        df = df_10k_per_sheet[selected_key[0]]
+        return df[[*df.columns[:2]]]
     else:
         return find_lease_commitments_and_contingencies(
             df_10k_per_sheet, year)
@@ -376,8 +377,6 @@ def main(tickers_csv_fpath):
 
     valid_years_per_ticker = download_10k(ciks, priorto, years, dl_folder)
     select_data(tickers, valid_years_per_ticker, dl_folder)
-
-
 
 
 def select_data(tickers, valid_years_per_ticker, dl_folder):
