@@ -54,7 +54,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             for accession_number, year in zip(accession_numbers, years[::-1]):
                 download_10k_htm(cik, accession_number,
                                  ticker_folder, year)
-    print(valid_years_per_ticker)
+
     return valid_years_per_ticker
 
 
@@ -80,8 +80,23 @@ def download_10k_htm(cik, accession_number, ticker_folder, year):
             output.write(r_htm.content)
 
 
-def select_data(tickers, valid_years_per_ticker,
-                naming_income_statement, dl_folder):
+def find_income_statement(df_10k_per_sheet):
+    df_10k_keys = df_10k_per_sheet.keys()
+    list_possibles = ["statement income", "statement earning"]
+    list_indexes = []
+    sheet_per_index = {}
+    for possible in list_possibles:
+        selected_sheet = regex_per_word_wrapper(
+            possible, df_10k_keys)
+        index = list(df_10k_keys).index(selected_sheet)
+        list_indexes.append(index)
+        sheet_per_index[index] = selected_sheet
+
+    selected_index = min(list_indexes)
+    return sheet_per_index[selected_index]
+
+
+def select_data(tickers, valid_years_per_ticker, dl_folder):
 
     for ticker in tickers:
         years = valid_years_per_ticker[ticker.lower()]
@@ -106,9 +121,6 @@ def select_data(tickers, valid_years_per_ticker,
             # May need to pull first column instead of sheet title
 
             # TODO
-            # Find regex per word
-
-            # TODO
             # Make sure the currency is correct
 
             # TODO
@@ -117,22 +129,27 @@ def select_data(tickers, valid_years_per_ticker,
             # TODO
             # Are positive/negative values ok
             # "statements of operations" or "income statement"
+
+            income_statement_name = find_income_statement(df_10k_per_sheet)
+            print("###income_statement_name : ", income_statement_name)
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
                                   "cash and cash equivalents",
                                   "property equipment", "equity",
                                   "goodwill", "intangible assets", "debt"],
-                naming_income_statement: ["operating income",
-                                          "operating profit",
-                                          "weightedaverage",
-                                          "weighted average",
-                                          "net income", "interest expense",
-                                          "per share", "dividend"],
+                income_statement_name: ["operating income",
+                                        "operating profit",
+                                        "weightedaverage",
+                                        "weighted average",
+                                        "net income", "interest expense",
+                                        "per share", "dividend"],
                 "statements cash flows": ["cash operating", "cash operation"]
             }
 
             # Check if all match
             for sheet, data_list in data_per_sheet.items():
+                if sheet == income_statement_name:
+                    continue
                 selected_sheet = regex_per_word_wrapper(
                     sheet, df_10k_per_sheet.keys())
                 if not len(selected_sheet):
@@ -143,8 +160,8 @@ def select_data(tickers, valid_years_per_ticker,
             all_df_data = []
             for target_sheet, data_list in data_per_sheet.items():
                 print(target_sheet)
-                df_data = parse_data_from_sheet(
-                    df_10k_per_sheet, target_sheet, data_list, year)
+                df_data = parse_data_from_sheet(income_statement_name,
+                                                df_10k_per_sheet, target_sheet, data_list, year)
                 all_df_data.append(df_data)
             all_df_data_concat = pd.concat(all_df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
@@ -266,6 +283,7 @@ def clean_df(df_per_sheet, year):
 
     # Put years in columns if in first row
     r = re.compile(".*" + year)
+    r_2 = re.compile(".*" + str(int(year) + 1))
     for sheet, df in df_per_sheet.items():
         title = df.columns[0]
         year_col_list = list(
@@ -275,7 +293,9 @@ def clean_df(df_per_sheet, year):
             first_row = [str(value) for value in df.iloc[0].values[1:]]
             year_first_row = list(
                 filter(r.match, first_row))
-            if year_first_row:
+            next_year_first_row = list(
+                filter(r_2.match, first_row))
+            if year_first_row or next_year_first_row:
                 new_columns = [title] + list(first_row)
                 columns_renaming = dict(zip(df.columns, new_columns))
                 cleaned_df = df.rename(columns=columns_renaming)
@@ -295,7 +315,7 @@ def clean_df(df_per_sheet, year):
             try:
                 df["isnull"] = df[year_col].isnull()
             except Exception as e:
-                print(e)
+                # print(e)
                 continue
             str_add = ""
             titles = [df.loc[0, title]]
@@ -322,7 +342,6 @@ def clean_df(df_per_sheet, year):
 
 
 def clean_col_and_multiplier(sheet_df, year):
-
     r = re.compile(".*" + year)
     year_col_list = list(
         filter(r.match, sheet_df.columns))
@@ -336,7 +355,7 @@ def clean_col_and_multiplier(sheet_df, year):
             year_col = year_col_list_one[0]
         else:
             sys.exit("Correct year {year} not found")
-    elif len(year_col_list) == 1:
+    elif len(year_col_list) >= 1:
         year_col = year_col_list[0]
 
     # Get multiplier
@@ -355,10 +374,15 @@ def clean_col_and_multiplier(sheet_df, year):
     return sheet_df, first_col, year_col, multiplier
 
 
-def parse_data_from_sheet(df_10k_per_sheet, target_sheet, data_list, year):
+def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
+                          target_sheet, data_list, year):
 
     dict_data = {}
-    sheet_key = regex_per_word_wrapper(target_sheet, df_10k_per_sheet.keys())
+    if target_sheet == income_statement_name:
+        sheet_key = target_sheet
+    else:
+        sheet_key = regex_per_word_wrapper(
+            target_sheet, df_10k_per_sheet.keys())
     sheet_df = df_10k_per_sheet[sheet_key]
     print(sheet_key)
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
@@ -395,8 +419,9 @@ def parse_data_from_sheet(df_10k_per_sheet, target_sheet, data_list, year):
     return df_data
 
 
-def regex_per_word_wrapper(sheet, df_10k_keys):
-    list_r = sheet.split(" ")
+def regex_per_word_wrapper(target_sheet, df_10k_keys):
+
+    list_r = target_sheet.split(" ")
     keys_array = np.array(list(df_10k_keys))
     keys = [key.split(" ") for key in df_10k_keys]
     match_key = np.array(list(map(functools.partial(
@@ -431,7 +456,7 @@ def regex_per_word(match, list_r):
     return False
 
 
-def main(tickers_csv_fpath, naming_income_statement):
+def main(tickers_csv_fpath):
 
     dl_folder = "10k_data"
     tickers_df = pd.read_csv(tickers_csv_fpath)
@@ -445,8 +470,7 @@ def main(tickers_csv_fpath, naming_income_statement):
     years = range(last_year-4, last_year+1)
 
     valid_years_per_ticker = download_10k(ciks, priorto, years, dl_folder)
-    select_data(tickers, valid_years_per_ticker,
-                naming_income_statement, dl_folder)
+    select_data(tickers, valid_years_per_ticker, dl_folder)
 
 
 def parse_args():
@@ -457,10 +481,6 @@ def parse_args():
         "--tickers_csv_fpath",
         type=str,
         default="list_tickers.csv")
-    parser.add_argument(
-        "--naming_income_statement",
-        type=str,
-        default="income statement")
     args = parser.parse_args()
 
     return args
@@ -469,5 +489,4 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    main(args.tickers_csv_fpath,
-         args.naming_income_statement)
+    main(args.tickers_csv_fpath)
