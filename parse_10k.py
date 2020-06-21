@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-
+import spacy
 from utils import create_document_list, get_cik, save_in_directory
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -141,7 +141,8 @@ def find_lease_commitments_and_contingencies(df_10k_per_sheet, year):
         select_text = max(full_texts, key=len)
         sentences = tokenizer.tokenize(select_text)
         sentences_lease = [
-            sentence for sentence in sentences if "lease" in sentence]
+            sentence for sentence in sentences if (
+                "lease" in sentence or year in sentence)]
 
         data = [[" ".join(sentences_lease)]]
         output_df = pd.DataFrame(data, columns=[year])
