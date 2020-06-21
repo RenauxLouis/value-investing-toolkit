@@ -7,12 +7,14 @@ import sys
 from datetime import datetime
 from functools import reduce
 from shutil import rmtree
+
 import nltk.data
 import numpy as np
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 import spacy
+from bs4 import BeautifulSoup
+
 from utils import create_document_list, get_cik, save_in_directory
 
 pp = pprint.PrettyPrinter(indent=4)
