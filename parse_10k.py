@@ -77,7 +77,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                     if accession_numbers_10k_amended:
                         input(
                             "THERE ARE AMENDED 10-K FILES, PLEASE CHECK THEM "
-                            "(<enter> to continue)")
+                            "(<enter> to continue) ")
                         full_urls_per_type["10-K_amended_htm"] = get_files_url(
                             cik, accession_numbers_10k_amended, "htm", "10-ka",
                             "10ka")
@@ -91,7 +91,6 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                         cik, accession_numbers, "htm", "", "")
             else:
                 sys.exit("Ticker data not found")
-        print(full_urls_per_type)
 
         for file_type, urls in full_urls_per_type.items():
             ext = file_type.split("_")[-1]
