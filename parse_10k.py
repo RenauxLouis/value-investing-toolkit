@@ -36,6 +36,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
 
+        os.makedirs(ticker_folder)
         full_urls_per_type = {}
         for filing_type in filing_types:
             params = {"action": "getcompany", "owner": "exclude",
@@ -183,11 +184,6 @@ def find_lease_commitments_and_contingencies(df_10k_per_sheet, year):
         sheet_df = df_10k_per_sheet[selected_key[0]]
         selected_df, first_col, year_col, multiplier = (
             clean_col_and_multiplier(sheet_df, year))
-        # r = re.compile(".*" + year)
-        # year_col_list = list(
-        #     filter(r.match, selected_df.columns))
-        # assert len(year_col_list) == 1
-        # year_col = year_col_list[0]
 
         full_texts = selected_df[year_col].fillna("").values
         select_text = max(full_texts, key=len)
