@@ -16,7 +16,7 @@ import yfinance as yf
 from bs4 import BeautifulSoup
 from yahoo_fin import stock_info as si
 
-from utils import create_document_list, get_cik, save_in_directory
+from utils import get_cik, save_in_directory
 
 pp = pprint.PrettyPrinter(indent=4)
 nltk.download('punkt')
@@ -44,28 +44,62 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             r = requests.get(BASE_URL, params=params)
             if r.status_code == 200:
                 data = r.text
-                urls, accession_numbers = create_document_list(data)
 
-                # List of url to the text documents
+                soup = BeautifulSoup(data, features="lxml")
+                urls = [link.string for link in soup.find_all(
+                    "filinghref")]
 
                 if filing_type == "10-K":
+                    types = [link.string for link in soup.find_all(
+                        "type")]
+
+                    _10k = []
+                    amended_10k = []
+                    for i, type_file in enumerate(types):
+                        if type_file == "10-K":
+                            if len(_10k) == 5:
+                                break
+                            _10k.append(urls[i])
+                        elif type_file == "10-K/A":
+                            amended_10k.append(urls[i])
+                        else:
+                            sys.exit("Unknown file type: ", type_file)
+
+                    accession_numbers_10k = [
+                        link.split("/")[-2] for link in _10k]
+                    accession_numbers_10k_amended = [
+                        link.split("/")[-2] for link in amended_10k]
+                    # List of url to the text documents
+
                     full_urls_per_type["10-K_htm"] = get_files_url(
-                        cik, accession_numbers, "htm", "10-k", "10k")
+                        cik, accession_numbers_10k, "htm", "10-k", "10k")
+                    if accession_numbers_10k_amended:
+                        input(
+                            "THERE ARE AMENDED 10-K FILES, PLEASE CHECK THEM "
+                            "(<enter> to continue)")
+                        full_urls_per_type["10-K_amended_htm"] = get_files_url(
+                            cik, accession_numbers_10k_amended, "htm", "10-ka",
+                            "10ka")
                     full_urls_per_type["10-K_xlsx"] = get_files_url(
-                        cik, accession_numbers, "xlsx", "Financial_Report",
+                        cik, accession_numbers_10k, "xlsx", "Financial_Report",
                         "Financial_Report")
                 elif filing_type == "DEF 14A":
+                    accession_numbers = [
+                        link.split("/")[-2] for link in urls[:5]]
                     full_urls_per_type["10-K_def_14a_htm"] = get_files_url(
                         cik, accession_numbers, "htm", "", "")
             else:
                 sys.exit("Ticker data not found")
+        print(full_urls_per_type)
 
         for file_type, urls in full_urls_per_type.items():
             ext = file_type.split("_")[-1]
             url_fr_per_year = {}
-            for i, year in enumerate(years[:: -1]):
-                url_fr_per_year[year] = urls[i]
-
+            if file_type == "10-K_amended_htm":
+                url_fr_per_year = {str(i): url for i, url in enumerate(urls)}
+            else:
+                for i, year in enumerate(years[:: -1]):
+                    url_fr_per_year[year] = urls[i]
             try:
                 valid_years = save_in_directory(ticker_folder, cik,
                                                 priorto, ext, file_type,
@@ -95,7 +129,7 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
             # TODO
             # Find a better method to pick the correct file (can't get cik V)
             fname = os.path.basename(urls[0])
-            url = os.path.join(accession_number_url, fname)
+            url = os.path.join(accession_number_url, fname).replace("\\", "/")
             return_urls.append(url)
     return return_urls
 
@@ -146,12 +180,14 @@ def find_lease_commitments_and_contingencies(df_10k_per_sheet, year):
         regex_per_word, list_r=list_r), keys)))
     selected_key = keys_array[match_keys]
     if selected_key.size > 0:
-        selected_df = df_10k_per_sheet[selected_key[0]]
-        r = re.compile(".*" + year)
-        year_col_list = list(
-            filter(r.match, selected_df.columns))
-        assert len(year_col_list) == 1
-        year_col = year_col_list[0]
+        sheet_df = df_10k_per_sheet[selected_key[0]]
+        selected_df, first_col, year_col, multiplier = (
+            clean_col_and_multiplier(sheet_df, year))
+        # r = re.compile(".*" + year)
+        # year_col_list = list(
+        #     filter(r.match, selected_df.columns))
+        # assert len(year_col_list) == 1
+        # year_col = year_col_list[0]
 
         full_texts = selected_df[year_col].fillna("").values
         select_text = max(full_texts, key=len)
@@ -294,6 +330,7 @@ def clean_col_and_multiplier(sheet_df, year):
     # TODO
     # What happens if both million and thousands in title
     first_col = sheet_df.columns[0]
+    multiplier = 1
     if "million" in first_col.lower():
         multiplier = 1000000
     elif "thousands" in first_col.lower():

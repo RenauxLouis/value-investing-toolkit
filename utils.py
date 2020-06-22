@@ -18,17 +18,6 @@ def get_cik(tickers):
     return cik_dict
 
 
-def create_document_list(data):
-
-    soup = BeautifulSoup(data, features="lxml")
-    link_list = [link.string for link in soup.find_all("filinghref")][:5]
-
-    accession_numbers = [link.split("/")[-2] for link in link_list]
-    print("Number of files to download: {0}".format(len(link_list)))
-
-    return link_list, accession_numbers
-
-
 def save_in_directory(ticker_folder, cik, priorto, ext,
                       file_type, url_fr_per_year):
 
