@@ -21,11 +21,13 @@ from utils import create_document_list, get_cik, save_in_directory
 pp = pprint.PrettyPrinter(indent=4)
 nltk.download('punkt')
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+BASE_URL = "http://www.sec.gov/cgi-bin/browse-edgar"
+BASE_EDGAR_URL = "https://www.sec.gov/Archives/edgar/data"
 
 
 def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
-    filing_type = "10-K"
+    filing_types = ["10-K", "DEF 14A"]
     count = 5
     valid_years_per_ticker = {}
     for ticker, cik in ciks_per_ticker.items():
@@ -33,58 +35,69 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         ticker_folder = os.path.join(dl_folder, ticker)
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
-        # Get the 10k
 
-        base_url = "http://www.sec.gov/cgi-bin/browse-edgar"
-        params = {"action": "getcompany", "owner": "exclude", "output": "xml",
-                  "CIK": cik, "type": filing_type, "dateb": priorto,
-                  "count": count}
-        r = requests.get(base_url, params=params)
-        if r.status_code == 200:
-            data = r.text
-            urls, accession_numbers = create_document_list(data)
+        full_urls_per_type = {}
+        for filing_type in filing_types:
+            params = {"action": "getcompany", "owner": "exclude",
+                      "output": "xml", "CIK": cik, "type": filing_type,
+                      "dateb": priorto, "count": count}
+            r = requests.get(BASE_URL, params=params)
+            if r.status_code == 200:
+                data = r.text
+                urls, accession_numbers = create_document_list(data)
+
+                # List of url to the text documents
+
+                if filing_type == "10-K":
+                    full_urls_per_type["10-K_htm"] = get_files_url(
+                        cik, accession_numbers, "htm", "10-k", "10k")
+                    full_urls_per_type["10-K_xlsx"] = get_files_url(
+                        cik, accession_numbers, "xlsx", "Financial_Report",
+                        "Financial_Report")
+                elif filing_type == "DEF 14A":
+                    full_urls_per_type["10-K_def_14a_htm"] = get_files_url(
+                        cik, accession_numbers, "htm", "", "")
+            else:
+                sys.exit("Ticker data not found")
+
+        for file_type, urls in full_urls_per_type.items():
+            ext = file_type.split("_")[-1]
             url_fr_per_year = {}
             for i, year in enumerate(years[:: -1]):
                 url_fr_per_year[year] = urls[i]
 
             try:
-                valid_years = save_in_directory(ticker_folder, cik, priorto,
+                valid_years = save_in_directory(ticker_folder, cik,
+                                                priorto, ext, file_type,
                                                 url_fr_per_year)
                 valid_years_per_ticker[ticker] = valid_years
             except Exception as e:
                 sys.exit(e)
 
-            for accession_number, year in zip(accession_numbers, years[::-1]):
-                download_10k_htm(cik, accession_number,
-                                 ticker_folder, year)
-        else:
-            sys.exit("Ticker data not found")
-
     return valid_years_per_ticker
 
 
-def download_10k_htm(cik, accession_number, ticker_folder, year):
-    year_str = str(year)
-    base_edgar_url = "https://www.sec.gov/Archives/edgar/data"
-    accession_number_url = os.path.join(
-        base_edgar_url, cik, accession_number).replace("\\", "/")
-    r = requests.get(accession_number_url)
-    if r.status_code == 200:
-        data = r.text
-        soup = BeautifulSoup(data, features="lxml")
-        links = [link.get("href") for link in soup.findAll("a")]
-        htm_urls = [link for link in links if (
-            link.split(".")[-1] == "htm" and (
-                "10-k" in link or "10k" in link))]
+def get_files_url(cik, accession_numbers, ext, if_1, if_2):
 
-        # TODO
-        # Find a better method to pick the correct htm (can't get cik V)
-        htm_fname = os.path.basename(htm_urls[0])
-        htm_url = os.path.join(accession_number_url, htm_fname)
-        r_htm = requests.get(htm_url)
-        fpath = os.path.join(ticker_folder, f"10k_{year_str}.htm")
-        with open(fpath, "wb") as output:
-            output.write(r_htm.content)
+    return_urls = []
+    for accession_number in accession_numbers:
+        accession_number_url = os.path.join(
+            BASE_EDGAR_URL, cik, accession_number).replace("\\", "/")
+        r = requests.get(accession_number_url)
+        if r.status_code == 200:
+            data = r.text
+            soup = BeautifulSoup(data, features="lxml")
+            links = [link.get("href") for link in soup.findAll("a")]
+            urls = [link for link in links if (link.split(".")[-1] == ext and (
+                if_1 in link or if_2 in link))
+            ]
+            urls = [url for url in urls if accession_number in url]
+            # TODO
+            # Find a better method to pick the correct file (can't get cik V)
+            fname = os.path.basename(urls[0])
+            url = os.path.join(accession_number_url, fname)
+            return_urls.append(url)
+    return return_urls
 
 
 def find_income_statement(df_10k_per_sheet):
