@@ -36,6 +36,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         if os.path.exists(ticker_folder):
             rmtree(ticker_folder)
 
+        os.makedirs(ticker_folder)
         full_urls_per_type = {}
         for filing_type in filing_types:
             params = {"action": "getcompany", "owner": "exclude",
@@ -95,7 +96,7 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
             # TODO
             # Find a better method to pick the correct file (can't get cik V)
             fname = os.path.basename(urls[0])
-            url = os.path.join(accession_number_url, fname)
+            url = os.path.join(accession_number_url, fname).replace("\\", "/")
             return_urls.append(url)
     return return_urls
 
