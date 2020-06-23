@@ -237,7 +237,7 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     return_sheet[year_col] = return_sheet[year_col]*multiplier
     return_sheet = return_sheet.rename(columns={first_col: "title"})
 
-    return return_sheet, year_col
+    return return_sheet
 
 
 def clean_df(df_per_sheet, year):
@@ -339,6 +339,7 @@ def clean_col_and_multiplier(sheet_df, year):
 def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
                           target_sheet, data_list, year):
 
+    year_col_return = None
     dict_data = {}
     if target_sheet == income_statement_name:
         sheet_key = target_sheet
@@ -346,10 +347,11 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
         sheet_key = regex_per_word_wrapper(
             target_sheet, df_10k_per_sheet.keys())
     sheet_df = df_10k_per_sheet[sheet_key]
-    print(sheet_key)
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
 
+    if target_sheet == "balance sheet":
+        year_col_return = year_col
     for data_point in data_list:
         list_r = data_point.split(" ")
         sheet_df = sheet_df.dropna(subset=[first_col])
@@ -378,7 +380,7 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
 
     df_data = pd.DataFrame.from_dict(dict_data, orient="index")
 
-    return df_data
+    return df_data, year_col_return
 
 
 def regex_per_word_wrapper(target_sheet, df_10k_keys):
@@ -503,17 +505,18 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
 
             all_df_data = []
             for target_sheet, data_list in data_per_sheet.items():
-                print(target_sheet)
-                df_data = parse_data_from_sheet(income_statement_name,
-                                                df_10k_per_sheet, target_sheet,
-                                                data_list, year)
+                df_data, year_col = parse_data_from_sheet(income_statement_name,
+                                                          df_10k_per_sheet, target_sheet,
+                                                          data_list, year)
                 all_df_data.append(df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_dfs[year] = lease_df
-            current_liabilities_df, year_col = get_current_liabilities_df(
+            current_liabilities_df = get_current_liabilities_df(
                 df_10k_per_sheet, year)
             all_df_data_concat = pd.concat(all_df_data)
-            stock_price_per_year[year] = get_stock_price(year_col, ticker)
+            # NO YEAR COL
+            if year_col:
+                stock_price_per_year[year] = get_stock_price(year_col, ticker)
             if current_liabilities_df is not None:
                 current_liabilities_dfs[year] = current_liabilities_df
             dict_data_year[year] = all_df_data_concat
