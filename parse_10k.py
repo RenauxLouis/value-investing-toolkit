@@ -141,9 +141,10 @@ def find_income_statement(df_10k_per_sheet):
     list_indexes = []
     sheet_per_index = {}
     for possible in list_possibles:
-        selected_sheet = regex_per_word_wrapper(
+        selected_sheets = regex_per_word_wrapper(
             possible, df_10k_keys)
-        if selected_sheet:
+        if selected_sheets is not None:
+            selected_sheet = selected_sheets[0]
             index = list(df_10k_keys).index(selected_sheet)
             list_indexes.append(index)
             sheet_per_index[index] = selected_sheet
@@ -200,7 +201,7 @@ def find_lease_commitments_and_contingencies(df_10k_per_sheet, year):
 
 def get_current_liabilities_df(df_10k_per_sheet, year):
     selected_key = regex_per_word_wrapper(
-        "balance sheet", df_10k_per_sheet.keys())
+        "balance sheet", df_10k_per_sheet.keys())[0]
     sheet_df = df_10k_per_sheet[selected_key]
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
@@ -247,6 +248,21 @@ def clean_df(df_per_sheet, year):
     r_2 = re.compile(".*" + str(int(year) + 1))
     for sheet, df in df_per_sheet.items():
         title = df.columns[0]
+
+        # Kill the columns of X month ended X < 12
+        columns_to_keep = []
+        for column in df.columns:
+            clean_col = column.lower(
+            )[:-1] if column.lower()[-1] == "s" else column.lower()
+            if "month" in clean_col:
+                months_duration = int(
+                    "".join([char for char in column if char.isdigit()]))
+                if months_duration == 12:
+                    columns_to_keep.append(column)
+
+        if columns_to_keep:
+            df = df[[title, *columns_to_keep]]
+
         year_col_list = list(
             filter(r.match, df.columns))
         if not year_col_list:
@@ -345,7 +361,7 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
         sheet_key = target_sheet
     else:
         sheet_key = regex_per_word_wrapper(
-            target_sheet, df_10k_per_sheet.keys())
+            target_sheet, df_10k_per_sheet.keys())[0]
     sheet_df = df_10k_per_sheet[sheet_key]
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
@@ -383,16 +399,18 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
     return df_data, year_col_return
 
 
-def regex_per_word_wrapper(target_sheet, df_10k_keys):
+def regex_per_word_wrapper(input_words, target_list):
 
-    list_r = target_sheet.split(" ")
-    keys_array = np.array(list(df_10k_keys))
-    keys = [key.split(" ") for key in df_10k_keys]
+    list_r = input_words.lower().split(" ")
+    target_list = [target.lower() for target in target_list]
+    keys_array = np.array(list(target_list))
+    keys = [key.split(" ") for key in target_list]
+
     match_key = np.array(list(map(functools.partial(
         regex_per_word, list_r=list_r), keys)))
-    selected_key = keys_array[match_key]
-    if len(selected_key):
-        return selected_key[0]
+    selected_keys = keys_array[match_key]
+    if len(selected_keys):
+        return selected_keys
     return None
 
 
@@ -494,17 +512,19 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
             for sheet, data_list in data_per_sheet.items():
                 if sheet == income_statement_name:
                     continue
-                selected_sheet = regex_per_word_wrapper(
+                selected_sheets = regex_per_word_wrapper(
                     sheet, df_10k_per_sheet.keys())
-                if not len(selected_sheet):
+                if not len(selected_sheets):
                     print("####", sheet, "not found")
                     sys.exit()
+                else:
+                    selected_sheet = selected_sheets[0]
 
             all_df_data = []
             for target_sheet, data_list in data_per_sheet.items():
-                df_data, year_col = parse_data_from_sheet(income_statement_name,
-                                                          df_10k_per_sheet, target_sheet,
-                                                          data_list, year)
+                df_data, year_col = parse_data_from_sheet(
+                    income_statement_name, df_10k_per_sheet, target_sheet,
+                    data_list, year)
                 all_df_data.append(df_data)
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_dfs[year] = lease_df
