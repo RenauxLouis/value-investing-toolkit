@@ -394,6 +394,8 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
         dict_data.update(
             zip(selected_df_year[first_col].values, values))
 
+    print(f"\n#### Target sheet : {target_sheet} used the year column "
+          f"{year_col}\n")
     df_data = pd.DataFrame.from_dict(dict_data, orient="index")
 
     return df_data, year_col_return
@@ -475,7 +477,9 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
         for _10k_fpath in _10k_fpaths:
             print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
-            print("Selecting data from", year)
+            print("\n" +  " "*8 + "#"*44)
+            print(" "*8 + f"######### Selecting data from {year} #########")
+            print(" "*8 + "#"*44 + "\n")
 
             df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
             df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
