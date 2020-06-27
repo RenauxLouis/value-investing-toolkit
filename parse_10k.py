@@ -244,8 +244,6 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
 def clean_df(df_per_sheet, year):
 
     # Put years in columns if in first row
-    r = re.compile(".*" + year)
-    r_2 = re.compile(".*" + str(int(year) + 1))
     for sheet, df in df_per_sheet.items():
         title = df.columns[0]
 
@@ -263,20 +261,26 @@ def clean_df(df_per_sheet, year):
         if columns_to_keep:
             df = df[[title, *columns_to_keep]]
 
-        year_col_list = list(
-            filter(r.match, df.columns))
-        if not year_col_list:
-            df.iloc[0] = df.iloc[0].fillna("")
-            first_row = [str(value) for value in df.iloc[0].values[1:]]
-            year_first_row = list(
-                filter(r.match, first_row))
-            next_year_first_row = list(
-                filter(r_2.match, first_row))
-            if year_first_row or next_year_first_row:
-                new_columns = [title] + list(first_row)
-                columns_renaming = dict(zip(df.columns, new_columns))
-                cleaned_df = df.rename(columns=columns_renaming)
+        for year_i in [str(int(year) + 1), year]:
+            r = re.compile(".*" + year_i)
+            year_col_list = list(
+                filter(r.match, df.columns))
+            if year_col_list:
+                cleaned_df = df[[title, year_col_list[0]]]
                 df_per_sheet[sheet] = cleaned_df
+                break
+            else:
+                df.iloc[0] = df.iloc[0].fillna("")
+                first_row = [str(value) for value in df.iloc[0].values[1:]]
+                year_first_row = list(
+                    filter(r.match, first_row))
+                if year_first_row:
+                    new_columns = [title] + list(first_row)
+                    columns_renaming = dict(zip(df.columns, new_columns))
+                    cleaned_df = df.rename(columns=columns_renaming)
+                    cleaned_df = cleaned_df[[title, year_first_row[0]]]
+                    df_per_sheet[sheet] = cleaned_df
+                    break
 
     # Put "title" as sheet name and lower
     df_per_sheet_title = {}
@@ -327,7 +331,7 @@ def clean_col_and_multiplier(sheet_df, year):
         year_col_list_one = list(
             filter(r.match, sheet_df.columns))
         if len(year_col_list_one):
-            print(f"End of year {year} in the start of year {next_year}")
+            # print(f"End of year {year} in the start of year {next_year}")
             year_col = year_col_list_one[0]
         else:
             sys.exit("Correct year {year} not found")
@@ -363,6 +367,7 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
         sheet_key = regex_per_word_wrapper(
             target_sheet, df_10k_per_sheet.keys())[0]
     sheet_df = df_10k_per_sheet[sheet_key]
+
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
 
@@ -477,14 +482,13 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
         for _10k_fpath in _10k_fpaths:
             print(_10k_fpath)
             year = _10k_fpath.split(".")[0][-4:]
-            print("\n" +  " "*8 + "#"*44)
+            print("\n" + " "*8 + "#"*44)
             print(" "*8 + f"######### Selecting data from {year} #########")
             print(" "*8 + "#"*44 + "\n")
 
             df_10k_per_sheet = pd.read_excel(_10k_fpath, sheet_name=None)
             df_10k_per_sheet = clean_df(df_10k_per_sheet, year)
 
-            # pp.pprint(list(df_10k_per_sheet.keys()))
             # TODO
             # Find if that split makes sense for other tickers
             # May need to pull first column instead of sheet title
@@ -521,8 +525,6 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
                 if not len(selected_sheets):
                     print("####", sheet, "not found")
                     sys.exit()
-                else:
-                    selected_sheet = selected_sheets[0]
 
             all_df_data = []
             for target_sheet, data_list in data_per_sheet.items():
