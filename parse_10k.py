@@ -358,7 +358,7 @@ def clean_col_and_multiplier(sheet_df, year):
 
 def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
                           target_sheet, data_list, year):
-
+    print(target_sheet)
     year_col_return = None
     dict_data = {}
     if target_sheet == income_statement_name:
@@ -370,6 +370,7 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
 
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
+    print(year_col)
 
     if target_sheet == "balance sheet":
         year_col_return = year_col
@@ -532,14 +533,17 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
                     income_statement_name, df_10k_per_sheet, target_sheet,
                     data_list, year)
                 all_df_data.append(df_data)
+                if year_col:
+                    stock_price_per_year[year] = get_stock_price(
+                        year_col, ticker)
+                    print(stock_price_per_year[year])
+
             lease_df = get_lease_df(df_10k_per_sheet, year)
             all_lease_dfs[year] = lease_df
             current_liabilities_df = get_current_liabilities_df(
                 df_10k_per_sheet, year)
             all_df_data_concat = pd.concat(all_df_data)
-            # NO YEAR COL
-            if year_col:
-                stock_price_per_year[year] = get_stock_price(year_col, ticker)
+
             if current_liabilities_df is not None:
                 current_liabilities_dfs[year] = current_liabilities_df
             dict_data_year[year] = all_df_data_concat
