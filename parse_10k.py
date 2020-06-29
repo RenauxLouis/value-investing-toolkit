@@ -507,12 +507,13 @@ def select_data(tickers, valid_years_per_ticker, dl_folder,
             income_statement_name = find_income_statement(df_10k_per_sheet)
             data_per_sheet = {
                 "balance sheet": ["total assets", "total liabilities",
-                                  "cash", "property equipment", "equity",
+                                  "cash", "equity",
                                   "goodwill", "intangible", "debt"],
                 income_statement_name: ["operating income", "operating profit",
                                         "weightedaverage", "weighted average",
                                         "income tax", "income taxes",
-                                        "net income", "interest expense",
+                                        "property", "net income",
+                                        "interest expense",
                                         "noncontrolling", "controlling",
                                         "per share", "dividend"],
                 "statements cash flows": ["cash operating", "cash operation"]
