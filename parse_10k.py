@@ -615,8 +615,7 @@ def get_stock_price(year_col, ticker):
 
 def parse_args():
     # Parse command line
-    parser = argparse.ArgumentParser(
-        description="Preprocessing Pipeline")
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--tickers",
         nargs="+")
