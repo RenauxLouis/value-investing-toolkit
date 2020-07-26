@@ -44,6 +44,10 @@ def download_files():
     os.system(f"open {dl_fullpath}")
 
 
+def close_window():
+    window.destroy()
+
+
 if __name__ == '__main__':
     window = tk.Tk()
     window.title('SEC 10K DOWNLOADER')
@@ -52,7 +56,7 @@ if __name__ == '__main__':
 
     button_exit = tk.Button(window,
                             text="Exit",
-                            command=exit,
+                            command=close_window,
                             highlightbackground="black")
 
     button_exit.place(relx=0.9, rely=0.9, anchor="center")
