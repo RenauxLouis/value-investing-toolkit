@@ -1,13 +1,13 @@
 import argparse
 import datetime
 import os
+import re
 import sys
+from collections import defaultdict
 from shutil import rmtree
 
 import requests
 from bs4 import BeautifulSoup
-
-from utils import get_cik, save_in_directory
 
 BASE_URL = "http://www.sec.gov/cgi-bin/browse-edgar"
 BASE_EDGAR_URL = "https://www.sec.gov/Archives/edgar/data"
@@ -15,9 +15,10 @@ BASE_EDGAR_URL = "https://www.sec.gov/Archives/edgar/data"
 
 def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
-    filing_types = ["10-K", "DEF 14A"]
+    # TODO
+    # Allow for specific year selection
     count = 5
-    valid_years_per_ticker = {}
+    ext = "htm"
     for ticker, cik in ciks_per_ticker.items():
         print("Ticker: ", ticker)
         ticker_folder = os.path.join(dl_folder, ticker)
@@ -25,78 +26,76 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             rmtree(ticker_folder)
 
         os.makedirs(ticker_folder)
-        full_urls_per_type = {}
-        for filing_type in filing_types:
-            params = {"action": "getcompany", "owner": "exclude",
-                      "output": "xml", "CIK": cik, "type": filing_type,
-                      "dateb": priorto, "count": count}
-            r = requests.get(BASE_URL, params=params)
-            if r.status_code == 200:
-                data = r.text
 
-                soup = BeautifulSoup(data, features="lxml")
-                urls = [link.string for link in soup.find_all(
-                    "filinghref")]
+        filing_type = "10-K"
+        params = {"action": "getcompany", "owner": "exclude",
+                  "output": "xml", "CIK": cik, "type": filing_type,
+                  "dateb": priorto, "count": count}
+        r = requests.get(BASE_URL, params=params)
+        if r.status_code != 200:
+            sys.exit("Ticker data not found")
+        else:
+            data = r.text
+            soup = BeautifulSoup(data, features="lxml")
 
-                if filing_type == "10-K":
-                    types = [link.string for link in soup.find_all(
-                        "type")]
+            urls = [link.string for link in soup.find_all(
+                "filinghref")]
+            types = [link.string for link in soup.find_all(
+                "type")]
 
-                    _10k = []
-                    amended_10k = []
-                    for i, type_file in enumerate(types):
-                        if type_file == "10-K":
-                            if len(_10k) == 5:
-                                break
-                            _10k.append(urls[i])
-                        elif type_file == "10-K/A":
-                            amended_10k.append(urls[i])
-                        else:
-                            sys.exit("Unknown file type: ", type_file)
+            current_year = years[-1]
+            urls_per_year = defaultdict(dict)
+            N_10k = 0
+            for type_file, url in zip(types, urls):
+                if N_10k == 5:
+                    break
+                urls_per_year[current_year][type_file] = url
 
-                    accession_numbers_10k = [
-                        link.split("/")[-2] for link in _10k]
-                    accession_numbers_10k_amended = [
-                        link.split("/")[-2] for link in amended_10k]
-                    # List of url to the text documents
+                if type_file == "10-K":
+                    current_year -= 1
+                    N_10k += 1
 
-                    full_urls_per_type["10-K"] = get_files_url(
-                        cik, accession_numbers_10k, "htm", "10-k", "10k")
+        filing_type = "DEF 14A"
+        params = {"action": "getcompany", "owner": "exclude",
+                  "output": "xml", "CIK": cik, "type": filing_type,
+                  "dateb": priorto, "count": count}
+        r = requests.get(BASE_URL, params=params)
+        if r.status_code != 200:
+            sys.exit("Ticker data not found")
+        else:
+            data = r.text
+            soup = BeautifulSoup(data, features="lxml")
+            urls = [link.string for link in soup.find_all(
+                "filinghref")]
 
-                    if accession_numbers_10k_amended:
-                        input(
-                            "THERE ARE AMENDED 10-K FILES, PLEASE CHECK THEM "
-                            "(<enter> to continue) ")
-                        full_urls_per_type["10-K_amended"] = get_files_url(
-                            cik, accession_numbers_10k_amended, "htm", "10-ka",
-                            "10ka")
+            current_year = years[-1]
+            for url in urls[:5]:
+                urls_per_year[current_year][filing_type] = url
+                current_year -= 1
 
-                elif filing_type == "DEF 14A":
-                    accession_numbers = [
-                        link.split("/")[-2] for link in urls[:5]]
-                    full_urls_per_type["Proxy_Statement"] = get_files_url(
-                        cik, accession_numbers, "htm", "", "")
-            else:
-                sys.exit("Ticker data not found")
-
-        for file_type, urls in full_urls_per_type.items():
-            print(file_type)
-            ext = "htm"
-            url_fr_per_year = {}
-            if file_type == "10-K_amended":
-                url_fr_per_year = {str(i): url for i, url in enumerate(urls)}
-            else:
-                for i, year in enumerate(years[:: -1]):
-                    url_fr_per_year[year] = urls[i]
-            try:
-                valid_years = save_in_directory(ticker_folder, cik,
-                                                priorto, ext, file_type,
-                                                url_fr_per_year)
-                valid_years_per_ticker[ticker] = valid_years
-            except Exception as e:
-                sys.exit(e)
-
-    return valid_years_per_ticker
+        map_regex = {
+            "10-K": ["10-k", "10k"],
+            "10-K/A": ["htm", "10-ka"],
+            "DEF 14A": ["", ""],
+        }
+        map_prefix = {
+            "10-K": "10K",
+            "10-K/A": "10K_amended",
+            "DEF 14A": "Proxy_Statement",
+        }
+        for year, urls in urls_per_year.items():
+            for file_type, url in urls.items():
+                prefix = map_prefix[file_type]
+                accession_numbers = [url.split("/")[-2]]
+                full_url = get_files_url(cik, accession_numbers,
+                                         "htm", *map_regex[file_type])
+                r = requests.get(full_url[0])
+                if r.status_code == 200:
+                    os.makedirs(ticker_folder, exist_ok=True)
+                    fpath = os.path.join(
+                        ticker_folder, f"{prefix}_{year}.{ext}")
+                    with open(fpath, "wb") as output:
+                        output.write(r.content)
 
 
 def get_files_url(cik, accession_numbers, ext, if_1, if_2):
@@ -124,6 +123,20 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
             else:
                 return_urls.append("check_amended")
     return return_urls
+
+
+def get_cik(tickers):
+    URL = "http://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner"
+    "=exclude&action=getcompany"
+    CIK_RE = re.compile(r".*CIK=(\d{10}).*")
+
+    cik_dict = {}
+    for ticker in tickers:
+        f = requests.get(URL.format(ticker), stream=True)
+        results = CIK_RE.findall(f.text)
+        if len(results):
+            cik_dict[str(ticker).lower()] = str(results[0])
+    return cik_dict
 
 
 def main(tickers, dl_folder_fpath):
