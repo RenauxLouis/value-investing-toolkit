@@ -74,6 +74,9 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
                     full_urls_per_type["10-K_htm"] = get_files_url(
                         cik, accession_numbers_10k, "htm", "10-k", "10k")
+                    url_xlsx_from_10k = get_files_url(
+                        cik, accession_numbers_10k, "xlsx", "Financial_Report",
+                        "Financial_Report")
                     if accession_numbers_10k_amended:
                         input(
                             "THERE ARE AMENDED 10-K FILES, PLEASE CHECK THEM "
@@ -81,9 +84,22 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                         full_urls_per_type["10-K_amended_htm"] = get_files_url(
                             cik, accession_numbers_10k_amended, "htm", "10-ka",
                             "10ka")
-                    full_urls_per_type["10-K_xlsx"] = get_files_url(
-                        cik, accession_numbers_10k, "xlsx", "Financial_Report",
-                        "Financial_Report")
+
+                    if "check_amended" in url_xlsx_from_10k:
+                        url_xlsx_from_10k_amended = get_files_url(
+                            cik, accession_numbers_10k_amended, "xlsx",
+                            "Financial_Report", "Financial_Report")
+                        print("Possible xlsx SEC urls:\n", [os.path.dirname(
+                            url) for url in url_xlsx_from_10k_amended])
+                        url_input_index = int(input(
+                            "Which is the index of the correct url to replace"
+                            " in the following url list: \n{}\nindex: ".format(
+                                "\n".join(url_xlsx_from_10k))))
+                        url_xlsx_from_10k[url_xlsx_from_10k.index(
+                            "check_amended")] = url_xlsx_from_10k_amended[
+                                url_input_index]
+
+                    full_urls_per_type["10-K_xlsx"] = url_xlsx_from_10k
                 elif filing_type == "DEF 14A":
                     accession_numbers = [
                         link.split("/")[-2] for link in urls[:5]]
@@ -128,9 +144,13 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
             urls = [url for url in urls if accession_number in url]
             # TODO
             # Find a better method to pick the correct file (can't get cik V)
-            fname = os.path.basename(urls[0])
-            url = os.path.join(accession_number_url, fname).replace("\\", "/")
-            return_urls.append(url)
+            if urls:
+                fname = os.path.basename(urls[0])
+                url = os.path.join(accession_number_url, fname).replace(
+                    "\\", "/")
+                return_urls.append(url)
+            else:
+                return_urls.append("check_amended")
     return return_urls
 
 
@@ -310,7 +330,7 @@ def clean_df(df_per_sheet, year):
                         titles.append(row_v)
                         continue
                 if str_add:
-                    titles.append("(" + str_add + ") " + row_v)
+                    titles.append("(" + str_add + ") " + str(row_v))
                     if isinstance(row_v, str) and (
                             "total" in row_v.lower()):
                         str_add = ""
