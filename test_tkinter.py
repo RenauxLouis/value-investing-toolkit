@@ -1,6 +1,6 @@
+import os
 from tkinter import *
-from tkinter import filedialog
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 from download_10k import download
 
