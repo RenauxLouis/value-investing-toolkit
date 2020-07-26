@@ -93,7 +93,8 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 if r.status_code == 200:
                     os.makedirs(ticker_folder, exist_ok=True)
                     fpath = os.path.join(
-                        ticker_folder, f"{prefix}_{year}.{ext}")
+                        ticker_folder,
+                        f"{ticker.upper()}_{prefix}_{year}.{ext}")
                     with open(fpath, "wb") as output:
                         output.write(r.content)
 
@@ -139,7 +140,7 @@ def get_cik(tickers):
     return cik_dict
 
 
-def main(tickers, dl_folder_fpath):
+def download(tickers, dl_folder_fpath):
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
@@ -167,4 +168,4 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    main(args.tickers, args.dl_folder_fpath)
+    download(args.tickers, args.dl_folder_fpath)
