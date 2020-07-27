@@ -1,6 +1,8 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter import ttk
+import sys
 
 from download_10k import download
 
@@ -13,18 +15,19 @@ def askdirectory():
 
 def UserFileInput(status, name):
     optionFrame = tk.Frame(window)
-    optionLabel = tk.Label(window, text=name,
-                           bg="black", fg="white")
+    optionLabel = tk.Label(window, text=name)#,
+                        #    bg="black", fg="white")
     optionLabel.place(relx=0.2, rely=0.4)
     text = status
     var = tk.StringVar(window)
     var.set(text)
     w = tk.Entry(optionFrame, textvariable=var)
 
-    button_folder = tk.Button(optionFrame,
-                              text="Select",
-                              command=askdirectory,
-                              highlightbackground="black")
+    button_folder = ttk.Button(optionFrame,
+                               text="Select",
+                               command=askdirectory, style="white/black.TLabel")
+                                #   bg="black", fg="white")#,
+                            #    highlightbackground="black")
     button_folder.pack(side="right")
     w.pack(side="right")
     optionFrame.place(relx=0.3, rely=0.4)
@@ -49,31 +52,39 @@ def close_window():
 
 
 if __name__ == '__main__':
+
+    # ttk.Style().configure("normal",
+    #                 foreground="red",
+    #                 background="blue")
+
     window = tk.Tk()
+    s = ttk.Style()
+    s.configure('white/black.TLabel', background='black')
     window.title('SEC 10K DOWNLOADER')
     window.geometry("600x400")
-    window.config(background="black")
+    window.config(background="white")
 
-    button_exit = tk.Button(window,
-                            text="Exit",
-                            command=close_window,
-                            highlightbackground="black")
+    button_exit = ttk.Button(window,
+                             text="Exit",
+                             command=close_window, style="white/black.TLabel")
+    #   bg="black", fg="white")#,
+    #  highlightbackground="black")
 
     button_exit.place(relx=0.9, rely=0.9, anchor="center")
 
     w, var = UserFileInput("", "Folder")
 
-    ticker_input = tk.Label(window, text="Ticker",
-                            bg="black", fg="white")
+    ticker_input = tk.Label(window, text="Ticker")#,
+                            # bg="black", fg="white")
     ticker_input.place(relx=0.2, rely=0.3)
     ticker = tk.Entry(window)
     ticker.place(relx=0.3, rely=0.3)
 
-    button_run = tk.Button(window,
-                           text="Download",
-                           command=download_files,
-                           bg="black",
-                           highlightbackground="black")
-    button_run.place(relx=0.38, rely=0.5)
+    button_run = ttk.Button(window,
+                            text="Download",
+                            command=download_files, style="white/black.TLabel")
+                            # bg = "black", fg = "white")  # ,
+                            # highlightbackground="black")
+    button_run.place(relx = 0.38, rely = 0.5)
 
     window.mainloop()
