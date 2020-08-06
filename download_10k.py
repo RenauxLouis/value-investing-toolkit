@@ -6,8 +6,10 @@ import sys
 from collections import defaultdict
 from shutil import rmtree
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 BASE_URL = "http://www.sec.gov/cgi-bin/browse-edgar"
 BASE_EDGAR_URL = "https://www.sec.gov/Archives/edgar/data"
@@ -19,7 +21,9 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
     # Allow for specific year selection
     count = 5
     ext = "htm"
-    for ticker, cik in ciks_per_ticker.items():
+    fname_per_type_per_year_per_ticker = {}
+    for ticker, cik in tqdm(ciks_per_ticker.items()):
+        fname_per_type_per_year = defaultdict(dict)
         print("Ticker: ", ticker)
         ticker_folder = os.path.join(dl_folder, ticker)
         if os.path.exists(ticker_folder):
@@ -76,12 +80,12 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         map_regex = {
             "10-K": ["10-k", "10k"],
             "10-K/A": ["htm", "10-ka"],
-            "DEF 14A": ["", ""],
+            "DEF 14A": ["", ""]
         }
         map_prefix = {
             "10-K": "10K",
             "10-K/A": "10K_amended",
-            "DEF 14A": "Proxy_Statement",
+            "DEF 14A": "Proxy_Statement"
         }
         for year, urls in urls_per_year.items():
             for file_type, url in urls.items():
@@ -89,14 +93,32 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 accession_numbers = [url.split("/")[-2]]
                 full_url = get_files_url(cik, accession_numbers,
                                          "htm", *map_regex[file_type])
+
                 r = requests.get(full_url[0])
                 if r.status_code == 200:
                     os.makedirs(ticker_folder, exist_ok=True)
                     fpath = os.path.join(
                         ticker_folder,
                         f"{ticker.upper()}_{prefix}_{year}.{ext}")
+                    fname_per_type_per_year[year][file_type] = fpath
                     with open(fpath, "wb") as output:
                         output.write(r.content)
+
+                if file_type == "10-K":
+                    full_url = get_files_url(
+                        cik, accession_numbers, "xlsx", "Financial_Report",
+                        "Financial_Report")
+                r = requests.get(full_url[0])
+                if r.status_code == 200:
+                    os.makedirs(ticker_folder, exist_ok=True)
+                    fpath = os.path.join(
+                        ticker_folder,
+                        f"{ticker.upper()}_{prefix}_{year}.xlsx")
+                    fname_per_type_per_year[year]["xlsx"] = fpath
+                    with open(fpath, "wb") as output:
+                        output.write(r.content)
+        fname_per_type_per_year_per_ticker[ticker] = fname_per_type_per_year
+    print(fname_per_type_per_year_per_ticker)
 
 
 def get_files_url(cik, accession_numbers, ext, if_1, if_2):
@@ -132,7 +154,7 @@ def get_cik(tickers):
     CIK_RE = re.compile(r".*CIK=(\d{10}).*")
 
     cik_dict = {}
-    for ticker in tickers:
+    for ticker in tqdm(tickers):
         f = requests.get(URL.format(ticker), stream=True)
         results = CIK_RE.findall(f.text)
         if len(results):
@@ -141,6 +163,10 @@ def get_cik(tickers):
 
 
 def download(tickers, dl_folder_fpath):
+
+    diff_df = pd.read_csv("diff.csv")
+    diff_df = diff_df.dropna(subset=['Company'])
+    tickers = diff_df["Company"].values[:1]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
