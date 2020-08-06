@@ -108,17 +108,17 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                     full_url = get_files_url(
                         cik, accession_numbers, "xlsx", "Financial_Report",
                         "Financial_Report")
-                r = requests.get(full_url[0])
-                if r.status_code == 200:
-                    os.makedirs(ticker_folder, exist_ok=True)
-                    fpath = os.path.join(
-                        ticker_folder,
-                        f"{ticker.upper()}_{prefix}_{year}.xlsx")
-                    fname_per_type_per_year[year]["xlsx"] = fpath
-                    with open(fpath, "wb") as output:
-                        output.write(r.content)
+                    r = requests.get(full_url[0])
+                    if r.status_code == 200:
+                        os.makedirs(ticker_folder, exist_ok=True)
+                        fpath = os.path.join(
+                            ticker_folder,
+                            f"{ticker.upper()}_{prefix}_{year}.xlsx")
+                        fname_per_type_per_year[year]["xlsx"] = fpath
+                        with open(fpath, "wb") as output:
+                            output.write(r.content)
         fname_per_type_per_year_per_ticker[ticker] = fname_per_type_per_year
-    print(fname_per_type_per_year_per_ticker)
+    return fname_per_type_per_year_per_ticker
 
 
 def get_files_url(cik, accession_numbers, ext, if_1, if_2):
@@ -162,7 +162,59 @@ def get_cik(tickers):
     return cik_dict
 
 
-def download(tickers, dl_folder_fpath):
+def parse_sheets(fname_per_type_per_year_per_ticker):
+
+    sheet_per_year_target_ticker = {}
+    for ticker, fname_per_type_per_year in (
+            fname_per_type_per_year_per_ticker.items()):
+        sheet_per_year_target = defaultdict(dict)
+        for year, fname_per_type in fname_per_type_per_year.items():
+
+            xlsx_fpath = fname_per_type["xlsx"]
+            df_10k_per_sheet = pd.read_excel(xlsx_fpath, sheet_name=None)
+
+            sheet_per_target = {}
+            target_list = ["cash", "balance sheet"]
+            target_income_statement = ["income", "earning", "operation"]
+            for sheet, df in df_10k_per_sheet.items():
+                title = df.columns[0].lower()
+                for target in target_list:
+                    if target in title:
+                        print(target, title)
+                        sheet_per_year_target[target][year] = df
+                        target_list.remove(target)
+                        break
+
+                for target in target_income_statement:
+                    if target in title:
+                        print(target, title)
+                        sheet_per_year_target["income"][year] = df
+                        target_income_statement = []
+                        break
+                if target_list == target_income_statement:
+                    break
+
+        sheet_per_year_target_ticker[ticker] = sheet_per_year_target
+    return sheet_per_year_target_ticker
+
+
+def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
+
+    map_sheet_name = {
+        "balance sheet": "Balance Sheet.xlsx",
+        "cash": "Cash Flow.xlsx",
+        "income": "Income Statement.xlsx",
+    }
+    for ticker, sheet_per_year_target in sheet_per_year_target_ticker.items():
+        for target, sheet_per_year in sheet_per_year_target.items():
+            fpath = os.path.join(dl_folder_fpath, ticker,
+                                 map_sheet_name[target])
+            with pd.ExcelWriter(fpath, engine="xlsxwriter") as writer:
+                for year, sheet in sheet_per_year.items():
+                    sheet.to_excel(writer, sheet_name=str(year), index=False)
+
+
+def download_and_parse(tickers, dl_folder_fpath):
 
     diff_df = pd.read_csv("diff.csv")
     diff_df = diff_df.dropna(subset=['Company'])
@@ -178,7 +230,13 @@ def download(tickers, dl_folder_fpath):
     last_year = int(priorto[:4]) - 1
     years = range(last_year-4, last_year+1)
 
-    download_10k(ciks, priorto, years, dl_folder_fpath)
+    fname_per_type_per_year_per_ticker = download_10k(
+        ciks, priorto, years, dl_folder_fpath)
+
+    sheet_per_year_target_ticker = parse_sheets(
+        fname_per_type_per_year_per_ticker)
+
+    merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath)
 
 
 def parse_args():
@@ -194,4 +252,4 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    download(args.tickers, args.dl_folder_fpath)
+    download_and_parse(args.tickers, args.dl_folder_fpath)
