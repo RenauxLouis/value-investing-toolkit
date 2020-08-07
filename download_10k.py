@@ -174,21 +174,18 @@ def parse_sheets(fname_per_type_per_year_per_ticker):
             xlsx_fpath = fname_per_type["xlsx"]
             df_10k_per_sheet = pd.read_excel(xlsx_fpath, sheet_name=None)
 
-            sheet_per_target = {}
             target_list = ["cash", "balance sheet"]
             target_income_statement = ["income", "earning", "operation"]
             for sheet, df in df_10k_per_sheet.items():
                 title = df.columns[0].lower()
                 for target in target_list:
                     if target in title:
-                        print(target, title)
                         sheet_per_year_target[target][year] = df
                         target_list.remove(target)
                         break
 
                 for target in target_income_statement:
                     if target in title:
-                        print(target, title)
                         sheet_per_year_target["income"][year] = df
                         target_income_statement = []
                         break
@@ -212,10 +209,17 @@ def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
                                  map_sheet_name[target])
 
             with pd.ExcelWriter(fpath, engine="xlsxwriter") as writer:
+                workbook = writer.book
+                # Format to $ cells
+                format1 = workbook.add_format({"num_format": "$#,##0.00"})
+
                 for year, sheet in sheet_per_year.items():
                     sheet_name = str(year)
                     sheet.to_excel(writer, sheet_name=sheet_name, index=False)
+
                     worksheet = writer.sheets[sheet_name]
+                    worksheet.set_column(1, 10, cell_format=format1)
+                    # Adjust columns
                     for idx, col in enumerate(sheet):
                         series = sheet[col]
                         max_len = max((
@@ -226,7 +230,7 @@ def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
                         # set column width
                         worksheet.set_column(idx, idx, max_len)
 
-                create_merged_df(sheet_per_year, writer)
+                create_merged_df(sheet_per_year, writer, format1)
 
 
 def clean_columns_df(sheet_per_year):
@@ -259,21 +263,25 @@ def clean_columns_df(sheet_per_year):
                 sheet_per_year[year] = cleaned_df
                 break
             else:
-                df.iloc[0] = df.iloc[0].fillna("")
-                first_row = [str(value) for value in df.iloc[0].values[1:]]
+                df_no_year_col_list = df.copy()
+                df_no_year_col_list.iloc[0] = df_no_year_col_list.iloc[
+                    0].fillna("")
+                first_row = [str(
+                    value) for value in df_no_year_col_list.iloc[0].values[1:]]
                 year_first_row = list(
                     filter(r.match, first_row))
                 if year_first_row:
                     new_columns = [title] + list(first_row)
                     columns_renaming = dict(zip(df.columns, new_columns))
-                    cleaned_df = df.rename(columns=columns_renaming)
+                    cleaned_df = df_no_year_col_list.rename(
+                        columns=columns_renaming)
                     cleaned_df = cleaned_df[[title, year_first_row[0]]]
                     sheet_per_year[year] = cleaned_df
                     break
     return sheet_per_year
 
 
-def create_merged_df(sheet_per_year, writer):
+def create_merged_df(sheet_per_year, writer, format1):
 
     # Clean columns of all sheets
     sheet_per_year = clean_columns_df(sheet_per_year)
@@ -314,7 +322,11 @@ def create_merged_df(sheet_per_year, writer):
             min(sheet_per_year.keys()))
     merged_df.to_excel(
         writer, sheet_name=merged_sheet_name, index=False)
+
     worksheet = writer.sheets[merged_sheet_name]
+    worksheet.set_column(1, 10, cell_format=format1)
+
+    # Adjust columns
     for idx, col in enumerate(merged_df):
         series = merged_df[col]
         max_len = max((
@@ -326,11 +338,18 @@ def create_merged_df(sheet_per_year, writer):
         worksheet.set_column(idx, idx, max_len)
 
 
+def remove_temp_files(fname_per_type_per_year_per_ticker):
+    for ticker, fname_per_type_per_year in (
+            fname_per_type_per_year_per_ticker.items()):
+        for year, fname_per_type in fname_per_type_per_year.items():
+            os.remove(fname_per_type["xlsx"])
+
+
 def download_and_parse(tickers, dl_folder_fpath):
 
-    # diff_df = pd.read_csv("diff.csv")
-    # diff_df = diff_df.dropna(subset=['Company'])
-    # tickers = diff_df["Company"].values[:1]
+    diff_df = pd.read_csv("diff.csv")
+    diff_df = diff_df.dropna(subset=['Company'])
+    tickers = diff_df["Company"].values[:1]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
@@ -349,6 +368,8 @@ def download_and_parse(tickers, dl_folder_fpath):
         fname_per_type_per_year_per_ticker)
 
     merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath)
+
+    # remove_temp_files(fname_per_type_per_year_per_ticker)
 
 
 def parse_args():
