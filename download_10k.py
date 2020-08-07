@@ -347,9 +347,9 @@ def remove_temp_files(fname_per_type_per_year_per_ticker):
 
 def download_and_parse(tickers, dl_folder_fpath):
 
-    diff_df = pd.read_csv("diff.csv")
-    diff_df = diff_df.dropna(subset=['Company'])
-    tickers = diff_df["Company"].values[:1]
+    # diff_df = pd.read_csv("diff.csv")
+    # diff_df = diff_df.dropna(subset=['Company'])
+    # tickers = diff_df["Company"].values[:1]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
