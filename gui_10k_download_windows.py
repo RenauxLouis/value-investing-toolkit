@@ -3,7 +3,7 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from download_10k import download
+from download_10k import download_and_parse
 
 
 def askdirectory():
@@ -35,7 +35,7 @@ def Print_entry():
 
 
 def download_files():
-    download([ticker.get()], var.get())
+    download_and_parse([ticker.get()], var.get())
     dl_fullpath = os.path.join(var.get(), ticker.get())
     cap_ticker = ticker.get().upper()
     dl_fullpath_clean = dl_fullpath.replace("/", r"\\")
