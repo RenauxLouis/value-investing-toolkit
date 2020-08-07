@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from functools import reduce
 from shutil import rmtree
 
 import pandas as pd
@@ -209,16 +210,127 @@ def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
         for target, sheet_per_year in sheet_per_year_target.items():
             fpath = os.path.join(dl_folder_fpath, ticker,
                                  map_sheet_name[target])
+
             with pd.ExcelWriter(fpath, engine="xlsxwriter") as writer:
                 for year, sheet in sheet_per_year.items():
-                    sheet.to_excel(writer, sheet_name=str(year), index=False)
+                    sheet_name = str(year)
+                    sheet.to_excel(writer, sheet_name=sheet_name, index=False)
+                    worksheet = writer.sheets[sheet_name]
+                    for idx, col in enumerate(sheet):
+                        series = sheet[col]
+                        max_len = max((
+                            # len of largest item
+                            series.astype(str).map(len).max(),
+                            len(str(series.name))  # len of column name/header
+                        )) + 1  # adding a little extra space
+                        # set column width
+                        worksheet.set_column(idx, idx, max_len)
+
+                create_merged_df(sheet_per_year, writer)
+
+
+def clean_columns_df(sheet_per_year):
+
+    # Put years in columns if in first row
+    # for sheet, df in sheet_per_year.items():
+    for year, df in sheet_per_year.items():
+        title = df.columns[0]
+
+        # Kill the columns of X month ended X < 12
+        columns_to_keep = []
+        for column in df.columns:
+            clean_col = column.lower(
+            )[:-1] if column.lower()[-1] == "s" else column.lower()
+            if "month" in clean_col:
+                months_duration = int(
+                    "".join([char for char in column if char.isdigit()]))
+                if months_duration == 12:
+                    columns_to_keep.append(column)
+
+        if columns_to_keep:
+            df = df[[title, *columns_to_keep]]
+
+        for year_i in [str(int(year) + 1), str(year)]:
+            r = re.compile(".*" + year_i)
+            year_col_list = list(
+                filter(r.match, df.columns))
+            if year_col_list:
+                cleaned_df = df[[title, year_col_list[0]]]
+                sheet_per_year[year] = cleaned_df
+                break
+            else:
+                df.iloc[0] = df.iloc[0].fillna("")
+                first_row = [str(value) for value in df.iloc[0].values[1:]]
+                year_first_row = list(
+                    filter(r.match, first_row))
+                if year_first_row:
+                    new_columns = [title] + list(first_row)
+                    columns_renaming = dict(zip(df.columns, new_columns))
+                    cleaned_df = df.rename(columns=columns_renaming)
+                    cleaned_df = cleaned_df[[title, year_first_row[0]]]
+                    sheet_per_year[year] = cleaned_df
+                    break
+    return sheet_per_year
+
+
+def create_merged_df(sheet_per_year, writer):
+
+    # Clean columns of all sheets
+    sheet_per_year = clean_columns_df(sheet_per_year)
+    merged_df = reduce(
+        lambda left, right: pd.merge(
+            left, right, left_on=left.columns[0],
+            right_on=right.columns[0], how="outer"),
+        list(sheet_per_year.values()))
+
+    # Keep one column per year
+    clean_cols = []
+    drop_col = []
+    for col in merged_df.columns:
+        if col[-2:] == "_x":
+            clean_cols.append(col[:-2])
+        elif col[-2:] == "_y":
+            clean_cols.append(col)
+            drop_col.append(col)
+        else:
+            clean_cols.append(col)
+    merged_df = merged_df.rename(columns=dict(
+        zip(merged_df.columns, clean_cols)))
+    merged_df = merged_df.drop(columns=drop_col)
+
+    # Drop columns not in years range
+    drop_col = []
+    years = sheet_per_year.keys()
+    for col in merged_df.columns[1:]:
+        for year in years:
+            if str(year) in col:
+                break
+        else:
+            drop_col.append(col)
+    merged_df = merged_df.drop(columns=drop_col)
+
+    merged_sheet_name = str(
+        max(sheet_per_year.keys())) + "-" + str(
+            min(sheet_per_year.keys()))
+    merged_df.to_excel(
+        writer, sheet_name=merged_sheet_name, index=False)
+    worksheet = writer.sheets[merged_sheet_name]
+    for idx, col in enumerate(merged_df):
+        series = merged_df[col]
+        max_len = max((
+            # len of largest item
+            series.astype(str).map(len).max(),
+            len(str(series.name))  # len of column name/header
+        )) + 1  # adding a little extra space
+        # set column width
+        worksheet.set_column(idx, idx, max_len)
 
 
 def download_and_parse(tickers, dl_folder_fpath):
 
-    diff_df = pd.read_csv("diff.csv")
-    diff_df = diff_df.dropna(subset=['Company'])
-    tickers = diff_df["Company"].values[:1]
+    # diff_df = pd.read_csv("diff.csv")
+    # diff_df = diff_df.dropna(subset=['Company'])
+    # tickers = diff_df["Company"].values[:1]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
