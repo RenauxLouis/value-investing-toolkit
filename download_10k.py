@@ -7,8 +7,8 @@ from collections import defaultdict
 from functools import reduce
 from shutil import rmtree
 
-import pandas as pd
-import requests
+from pandas import read_excel, merge, ExcelWriter
+from requests import get
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
@@ -36,7 +36,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         params = {"action": "getcompany", "owner": "exclude",
                   "output": "xml", "CIK": cik, "type": filing_type,
                   "dateb": priorto, "count": count}
-        r = requests.get(BASE_URL, params=params)
+        r = get(BASE_URL, params=params)
         if r.status_code != 200:
             sys.exit("Ticker data not found")
         else:
@@ -64,7 +64,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
         params = {"action": "getcompany", "owner": "exclude",
                   "output": "xml", "CIK": cik, "type": filing_type,
                   "dateb": priorto, "count": count}
-        r = requests.get(BASE_URL, params=params)
+        r = get(BASE_URL, params=params)
         if r.status_code != 200:
             sys.exit("Ticker data not found")
         else:
@@ -95,7 +95,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 full_url = get_files_url(cik, accession_numbers,
                                          "htm", *map_regex[file_type])
 
-                r = requests.get(full_url[0])
+                r = get(full_url[0])
                 if r.status_code == 200:
                     os.makedirs(ticker_folder, exist_ok=True)
                     fpath = os.path.join(
@@ -109,7 +109,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                     full_url = get_files_url(
                         cik, accession_numbers, "xlsx", "Financial_Report",
                         "Financial_Report")
-                    r = requests.get(full_url[0])
+                    r = get(full_url[0])
                     if r.status_code == 200:
                         os.makedirs(ticker_folder, exist_ok=True)
                         fpath = os.path.join(
@@ -128,7 +128,7 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
     for accession_number in accession_numbers:
         accession_number_url = os.path.join(
             BASE_EDGAR_URL, cik, accession_number).replace("\\", "/")
-        r = requests.get(accession_number_url)
+        r = get(accession_number_url)
         if r.status_code == 200:
             data = r.text
             soup = BeautifulSoup(data, features="lxml")
@@ -156,7 +156,7 @@ def get_cik(tickers):
 
     cik_dict = {}
     for ticker in tqdm(tickers):
-        f = requests.get(URL.format(ticker), stream=True)
+        f = get(URL.format(ticker), stream=True)
         results = CIK_RE.findall(f.text)
         if len(results):
             cik_dict[str(ticker).lower()] = str(results[0])
@@ -172,7 +172,7 @@ def parse_sheets(fname_per_type_per_year_per_ticker):
         for year, fname_per_type in fname_per_type_per_year.items():
 
             xlsx_fpath = fname_per_type["xlsx"]
-            df_10k_per_sheet = pd.read_excel(xlsx_fpath, sheet_name=None)
+            df_10k_per_sheet = read_excel(xlsx_fpath, sheet_name=None)
 
             target_list = ["cash", "balance sheet"]
             target_income_statement = ["income", "earning", "operation"]
@@ -208,7 +208,7 @@ def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
             fpath = os.path.join(dl_folder_fpath, ticker,
                                  map_sheet_name[target])
 
-            with pd.ExcelWriter(fpath, engine="xlsxwriter") as writer:
+            with ExcelWriter(fpath, engine="xlsxwriter") as writer:
                 workbook = writer.book
                 # Format to $ cells
                 format1 = workbook.add_format({"num_format": "$#,##0.00"})
@@ -286,7 +286,7 @@ def create_merged_df(sheet_per_year, writer, format1):
     # Clean columns of all sheets
     sheet_per_year = clean_columns_df(sheet_per_year)
     merged_df = reduce(
-        lambda left, right: pd.merge(
+        lambda left, right: merge(
             left, right, left_on=left.columns[0],
             right_on=right.columns[0], how="outer"),
         list(sheet_per_year.values()))
@@ -347,7 +347,7 @@ def remove_temp_files(fname_per_type_per_year_per_ticker):
 
 def download_and_parse(tickers, dl_folder_fpath):
 
-    # diff_df = pd.read_csv("diff.csv")
+    # diff_df = read_csv("diff.csv")
     # diff_df = diff_df.dropna(subset=['Company'])
     # tickers = diff_df["Company"].values[:1]
 
