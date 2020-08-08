@@ -214,20 +214,36 @@ def merge_sheet_across_years(sheet_per_year_target_ticker, dl_folder_fpath):
                 format1 = workbook.add_format({"num_format": "$#,##0.00"})
 
                 for year, sheet in sheet_per_year.items():
+                    print(year)
                     sheet_name = str(year)
+                    clean_columns = [col.replace(
+                        "Unnamed: ", "") for col in sheet.columns]
+
+                    sheet = sheet.rename(columns=dict(
+                        zip(sheet.columns, clean_columns)))
                     sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
                     worksheet = writer.sheets[sheet_name]
                     worksheet.set_column(1, 10, cell_format=format1)
                     # Adjust columns
                     for idx, col in enumerate(sheet):
+
+                        print(col)
                         series = sheet[col]
                         max_len = max((
                             # len of largest item
                             series.astype(str).map(len).max(),
                             len(str(series.name))  # len of column name/header
                         )) + 1  # adding a little extra space
+                        print(max_len)
+
                         # set column width
+                        # print("count", series.isna().sum())
+                        if (series.isna().sum() / len(series)) > 0.66:
+                            default_max_length = 12
+                        else:
+                            default_max_length = 68
+                        max_len = min(max_len, default_max_length)
                         worksheet.set_column(idx, idx, max_len)
 
                 create_merged_df(sheet_per_year, writer, format1)
@@ -317,6 +333,8 @@ def create_merged_df(sheet_per_year, writer, format1):
             drop_col.append(col)
     merged_df = merged_df.drop(columns=drop_col)
 
+    merged_df = merged_df.drop_duplicates()
+
     merged_sheet_name = str(
         max(sheet_per_year.keys())) + "-" + str(
             min(sheet_per_year.keys()))
@@ -335,6 +353,7 @@ def create_merged_df(sheet_per_year, writer, format1):
             len(str(series.name))  # len of column name/header
         )) + 1  # adding a little extra space
         # set column width
+        print(max_len)
         worksheet.set_column(idx, idx, max_len)
 
 
@@ -350,6 +369,7 @@ def download_and_parse(tickers, dl_folder_fpath):
     # diff_df = read_csv("diff.csv")
     # diff_df = diff_df.dropna(subset=['Company'])
     # tickers = diff_df["Company"].values[:1]
+    tickers = ["WFC"]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
