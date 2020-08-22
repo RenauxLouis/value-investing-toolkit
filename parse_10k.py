@@ -226,7 +226,7 @@ def get_current_liabilities_df(df_10k_per_sheet, year):
     sheet_df, first_col, year_col, multiplier = clean_col_and_multiplier(
         sheet_df, year)
     list_r = ["current", "liabilities"]
-    sheet_df = sheet_df.dropna(subset=[first_col])
+    sheet_df = sheet_df.dropna(subset=[first_col]).copy()
     sheet_df["mask_col"] = sheet_df[first_col].apply(
         lambda match: regex_per_word(match.split(" "), list_r))
     if not sheet_df["mask_col"].any():
@@ -279,7 +279,7 @@ def clean_df(df_per_sheet, year):
                     columns_to_keep.append(column)
 
         if columns_to_keep:
-            df = df[[title, *columns_to_keep]]
+            df = df[[title, *columns_to_keep]].copy()
 
         for year_i in [str(int(year) + 1), year]:
             r = re.compile(".*" + year_i)
@@ -396,7 +396,7 @@ def parse_data_from_sheet(income_statement_name, df_10k_per_sheet,
         year_col_return = year_col
     for data_point in data_list:
         list_r = data_point.split(" ")
-        sheet_df = sheet_df.dropna(subset=[first_col])
+        sheet_df = sheet_df.dropna(subset=[first_col]).copy()
         sheet_df["mask_col"] = sheet_df[first_col].apply(
             lambda match: regex_per_word(match.split(" "), list_r))
         # sheet_df[first_col].str.contains(
