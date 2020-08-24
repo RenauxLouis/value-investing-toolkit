@@ -369,7 +369,7 @@ def download_and_parse(tickers, dl_folder_fpath):
     # diff_df = read_csv("diff.csv")
     # diff_df = diff_df.dropna(subset=['Company'])
     # tickers = diff_df["Company"].values[:1]
-    tickers = ["WFC"]
+    # tickers = ["WFC"]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
