@@ -1,10 +1,11 @@
 import argparse
-import pandas as pd
-import matplotlib.pyplot as plt
-import yfinance as yf
 from datetime import date, timedelta
-from mplfinance import plot
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import yfinance as yf
 from matplotlib import patches
+from mplfinance import plot
 
 
 def print_prices(ticker, ticker_price_df):
