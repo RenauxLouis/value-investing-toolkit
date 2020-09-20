@@ -1,8 +1,7 @@
+import json
 import smtplib
 import ssl
 from datetime import date, timedelta
-from warnings import warn
-import json
 
 import pandas as pd
 import yfinance as yf
