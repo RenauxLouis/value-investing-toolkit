@@ -10,19 +10,17 @@ import ssl
 
 def create_secure_connection_and_send_mail(ticker, most_recent_price,
                                            strike_price):
-    port = 465  # For SSL
+    port = 465
     password = input("Type your password and press enter: ")
-
-    # Create a secure SSL context
+    sender_email = "strike.price.notification@gmail.com"
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", port,
-                          context=context) as server:
-        server.login("strike.price.notification@gmail.com", password)
-        send_mail(ticker, most_recent_price, strike_price, server)
+    with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+        server.login(sender_email, password)
+        send_mail(ticker, most_recent_price,
+                  strike_price, server, sender_email)
 
 
-def send_mail(ticker, most_recent_price, strike_price, server):
-    sender_email = "strike.price.notificatio@gmail.com"
+def send_mail(ticker, most_recent_price, strike_price, server, sender_email):
     receiver_email = "renauxlouis@gmail.com"
     message = f"""\
     Subject: STRIKE PRICE {ticker.upper()}
