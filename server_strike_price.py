@@ -1,13 +1,12 @@
-import argparse
-from datetime import date, timedelta
-from warnings import warn
-from flask import Flask, Response, request
-from waitress import serve
-import pandas as pd
-import yfinance as yf
 import smtplib
 import ssl
+from datetime import date, timedelta
+from warnings import warn
 
+import pandas as pd
+import yfinance as yf
+from flask import Flask, Response, request
+from waitress import serve
 
 CSV_FPATH = "list_price_follow.csv"
 
