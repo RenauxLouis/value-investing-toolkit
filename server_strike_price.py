@@ -2,6 +2,7 @@ import smtplib
 import ssl
 from datetime import date, timedelta
 from warnings import warn
+import json
 
 import pandas as pd
 import yfinance as yf
@@ -58,41 +59,45 @@ def add_tickers_to_db(tickers_to_add, df):
 def add_one_ticker_to_db(ticker, strike_price, df):
 
     if ticker in df["ticker"].values:
-        msg = (f"Cannot add ticker '{ticker}' as it is already in the"
-               " database")
-        warn(msg)
+        return Response(f"Ticker {ticker} already in the database",
+                        status=401, mimetype="application/json")
 
     df = df.append(
         {"ticker": ticker, "strike_price": strike_price},
         ignore_index=True)
 
-    return df
+    df.to_csv(CSV_FPATH)
+
+    return Response(json.dumps({'success': True}), status=200,
+                    mimetype="application/json")
 
 
 app = Flask(__name__)
 
 
-@app.route('/isalive', methods=["GET"])
+@app.route("/is_alive", methods=["GET"])
 def is_alive():
     return "OK"
 
 
-@app.route('/add_ticker', methods=["POST"])
+@app.route("/add_ticker", methods=["POST"])
 def infer():
     try:
 
         df = pd.read_csv(CSV_FPATH)
         ticker_to_add = request.json["ticker_to_add"]
         strike_price = request.json["strike_price"]
-        df = add_tickers_to_db(ticker_to_add, strike_price, df)
-        if "fname" not in request.json:
-            return Response("{'Error':'S3 File path missing. Please provide as"
-                            " the fname field'}", status=401,
+
+        if "ticker_to_add" not in request.json:
+            return Response("{'Error':'Ticker missing. Please provide as"
+                            " the ticker_to_add field'}", status=401,
+                            mimetype="application/json")
+        if "strike_price" not in request.json:
+            return Response("{'Error':'Strike price missing. Please provide as"
+                            " the strike_price field'}", status=401,
                             mimetype="application/json")
 
-        return Response(f"'Error':'Ticker {ticker_to_add} correctly added to"
-                        " the database'", status=200,
-                        mimetype="application/json")
+        return add_one_ticker_to_db(ticker_to_add, strike_price, df)
 
     except Exception as e:
         error_to_send = "Error: " + str(e)
