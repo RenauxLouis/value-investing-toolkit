@@ -1,8 +1,10 @@
 import json
-
+import os
 import pandas as pd
 from flask import Flask, Response, request
 from waitress import serve
+
+from utils import get_current_date_time_as_prefix
 
 CSV_FPATH = "list_price_follow.csv"
 
@@ -45,6 +47,17 @@ def read_db():
     df = pd.read_csv(CSV_FPATH)
     df_as_dict = dict(zip(df["ticker"], df["strike_price"]))
     return Response(json.dumps(df_as_dict), status=200,
+                    mimetype="application/json")
+
+
+@app.route("/reset_db", methods=["GET"])
+def reset_db():
+    time_now = get_current_date_time_as_prefix()
+    os.rename(os.path.join("saved_db", CSV_FPATH, time_now + CSV_FPATH))
+    df_empty = pd.DataFrame({"ticker": [], "strike_price": []})
+    df_empty.to_csv(CSV_FPATH)
+
+    return Response(json.dumps({"Success": "Database reset"}), status=200,
                     mimetype="application/json")
 
 
