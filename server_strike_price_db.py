@@ -1,10 +1,6 @@
 import json
-import smtplib
-import ssl
-from datetime import date, timedelta
 
 import pandas as pd
-import yfinance as yf
 from flask import Flask, Response, request
 from waitress import serve
 
