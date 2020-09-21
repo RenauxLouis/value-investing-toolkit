@@ -35,8 +35,8 @@ def add_one_ticker_to_db(ticker, strike_price, df):
 
     df.to_csv(CSV_FPATH)
 
-    return Response(json.dumps({'success': True}), status=200,
-                    mimetype="application/json")
+    return Response(json.dumps({"Success": "Ticker {ticker} added to the db"}),
+                    status=200, mimetype="application/json")
 
 
 @app.route("/is_alive", methods=["GET"])
