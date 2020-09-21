@@ -33,7 +33,7 @@ def add_one_ticker_to_db(ticker, strike_price, df):
 
     df.to_csv(CSV_FPATH, index=False)
 
-    return Response(json.dumps({"Success": "Ticker {ticker} added to the db"}),
+    return Response(json.dumps({"Success": f"Ticker {ticker} added to the db"}),
                     status=200, mimetype="application/json")
 
 
