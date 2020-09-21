@@ -6,7 +6,7 @@ from waitress import serve
 
 from utils import get_current_date_time_as_prefix
 
-CSV_FPATH = "list_price_follow.csv"
+from constants import CSV_FPATH
 
 app = Flask(__name__)
 
