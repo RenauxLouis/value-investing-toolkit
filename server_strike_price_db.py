@@ -53,7 +53,9 @@ def read_db():
 @app.route("/reset_db", methods=["GET"])
 def reset_db():
     time_now = get_current_date_time_as_prefix()
-    os.rename(CSV_FPATH, os.path.join("saved_db", time_now + CSV_FPATH))
+    saved_db_folder = "saved_db"
+    os.makedirs(saved_db_folder, exist_ok=True)
+    os.rename(CSV_FPATH, os.path.join(saved_db_folder, time_now + CSV_FPATH))
     df_empty = pd.DataFrame({"ticker": [], "strike_price": []})
     df_empty.to_csv(CSV_FPATH)
 
