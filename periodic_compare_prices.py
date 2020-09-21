@@ -1,10 +1,10 @@
-from datetime import date, timedelta
 import smtplib
 import ssl
-import pandas as pd
-import yfinance as yf
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import pandas as pd
+from yahoo_fin import stock_info
 
 from constants import CSV_FPATH
 
@@ -63,10 +63,7 @@ def compare_current_to_strike_prices(sender_email, sender_password):
     df = pd.read_csv(CSV_FPATH)
     tickers_to_remove = []
     for ticker, strike_price in zip(df["ticker"], df["strike_price"]):
-        date_today = date.today()
-        ticker_price_df = yf.download(
-            ticker, date_today - timedelta(days=7), date_today)
-        most_recent_price = ticker_price_df.iloc[-1]["Close"]
+        most_recent_price = stock_info.get_live_price(ticker)
         print(ticker, strike_price, most_recent_price)
         if most_recent_price < strike_price:
             create_secure_connection_and_send_mail(
