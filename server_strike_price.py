@@ -10,40 +10,7 @@ from waitress import serve
 
 CSV_FPATH = "list_price_follow.csv"
 
-
-def create_secure_connection_and_send_mail(ticker, most_recent_price,
-                                           strike_price, sender_email,
-                                           receiver_email):
-    port = 465
-    password = input("Type your password and press enter: ")
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
-        server.login(sender_email, password)
-        send_mail(ticker, most_recent_price,
-                  strike_price, server, sender_email, receiver_email)
-
-
-def send_mail(ticker, most_recent_price, strike_price, server,
-              sender_email, receiver_email):
-    message = f"""\
-    Subject: STRIKE PRICE {ticker.upper()}
-
-    Today's closing price on '{ticker}' was ${int(round(most_recent_price, 0))} which is below the strike price you set at ${strike_price}"""
-    server.sendmail(sender_email, receiver_email, message)
-
-
-def compare_current_to_strike_prices(csv_fpath, sender_email, receiver_email):
-    df = pd.read_csv(csv_fpath)
-    for ticker, strike_price in zip(df["ticker"], df["strike_price"]):
-        date_today = date.today()
-        ticker_price_df = yf.download(
-            ticker, date_today - timedelta(days=7), date_today)
-        most_recent_price = ticker_price_df.iloc[-1]["Close"]
-        print(most_recent_price)
-        if most_recent_price < strike_price:
-            create_secure_connection_and_send_mail(
-                ticker, most_recent_price, strike_price, sender_email,
-                receiver_email)
+app = Flask(__name__)
 
 
 def add_tickers_to_db(tickers_to_add, df):
@@ -58,6 +25,7 @@ def add_tickers_to_db(tickers_to_add, df):
 def add_one_ticker_to_db(ticker, strike_price, df):
 
     if ticker in df["ticker"].values:
+        # Add a way to cleanly edit the strike price
         return Response(f"Ticker {ticker} already in the database",
                         status=401, mimetype="application/json")
 
@@ -71,12 +39,17 @@ def add_one_ticker_to_db(ticker, strike_price, df):
                     mimetype="application/json")
 
 
-app = Flask(__name__)
-
-
 @app.route("/is_alive", methods=["GET"])
 def is_alive():
     return "OK"
+
+
+@app.route("/read_db", methods=["GET"])
+def read_db():
+    df = pd.read_csv(CSV_FPATH)
+    df_as_dict = dict(zip(df["ticker"], df["strike_price"]))
+    return Response(json.dumps(df_as_dict), status=200,
+                    mimetype="application/json")
 
 
 @app.route("/add_ticker", methods=["POST"])
