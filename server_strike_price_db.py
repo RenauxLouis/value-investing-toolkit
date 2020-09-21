@@ -31,7 +31,7 @@ def add_one_ticker_to_db(ticker, strike_price, df):
         {"ticker": ticker, "strike_price": strike_price},
         ignore_index=True)
 
-    df.to_csv(CSV_FPATH)
+    df.to_csv(CSV_FPATH, index=False)
 
     return Response(json.dumps({"Success": "Ticker {ticker} added to the db"}),
                     status=200, mimetype="application/json")
@@ -44,7 +44,7 @@ def is_alive():
 
 @app.route("/read_db", methods=["GET"])
 def read_db():
-    df = pd.read_csv(CSV_FPATH)
+    df = pd.read_csv(CSV_FPATH, index_col=False)
     df_as_dict = dict(zip(df["ticker"], df["strike_price"]))
     return Response(json.dumps(df_as_dict), status=200,
                     mimetype="application/json")
@@ -57,7 +57,7 @@ def reset_db():
     os.makedirs(saved_db_folder, exist_ok=True)
     os.rename(CSV_FPATH, os.path.join(saved_db_folder, time_now + CSV_FPATH))
     df_empty = pd.DataFrame({"ticker": [], "strike_price": []})
-    df_empty.to_csv(CSV_FPATH)
+    df_empty.to_csv(CSV_FPATH, index=False)
 
     return Response(json.dumps({"Success": "Database reset"}), status=200,
                     mimetype="application/json")
@@ -67,7 +67,7 @@ def reset_db():
 def infer():
     try:
 
-        df = pd.read_csv(CSV_FPATH)
+        df = pd.read_csv(CSV_FPATH, index_col=False)
         ticker_to_add = request.json["ticker_to_add"]
         strike_price = request.json["strike_price"]
 
