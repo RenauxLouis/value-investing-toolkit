@@ -8,6 +8,7 @@ from functools import reduce
 from shutil import rmtree
 
 from pandas import read_excel, merge, ExcelWriter
+import pandas as pd
 from requests import get
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -18,8 +19,7 @@ BASE_EDGAR_URL = "https://www.sec.gov/Archives/edgar/data"
 
 def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
-    # TODO
-    # Allow for specific year selection
+    # TODO: Allow for specific year selection
     count = 5
     ext = "htm"
     fname_per_type_per_year_per_ticker = {}
@@ -37,6 +37,7 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                   "output": "xml", "CIK": cik, "type": filing_type,
                   "dateb": priorto, "count": count}
         r = get(BASE_URL, params=params)
+        print(BASE_URL)
         if r.status_code != 200:
             sys.exit("Ticker data not found")
         else:
@@ -79,9 +80,9 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
                 current_year -= 1
 
         map_regex = {
-            "10-K": ["10-k", "10k"],
-            "10-K/A": ["htm", "10-ka"],
-            "DEF 14A": ["", ""]
+            "10-K": ("10-k", "10k"),
+            "10-K/A": ("htm", "10-ka"),
+            "DEF 14A": ("", "")
         }
         map_prefix = {
             "10-K": "10K",
@@ -89,11 +90,16 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
             "DEF 14A": "Proxy_Statement"
         }
         for year, urls in urls_per_year.items():
+            print("year :", year)
             for file_type, url in urls.items():
+                print("file_type :", file_type)
+                print("url :", url)
+                file_type = file_type.replace("T", "")
                 prefix = map_prefix[file_type]
                 accession_numbers = [url.split("/")[-2]]
                 full_url = get_files_url(cik, accession_numbers,
-                                         "htm", *map_regex[file_type])
+                                         ".htm", *map_regex[file_type])
+                print(full_url)
 
                 r = get(full_url[0])
                 if r.status_code == 200:
@@ -107,8 +113,8 @@ def download_10k(ciks_per_ticker, priorto, years, dl_folder):
 
                 if file_type == "10-K":
                     full_url = get_files_url(
-                        cik, accession_numbers, "xlsx", "Financial_Report",
-                        "Financial_Report")
+                        cik, accession_numbers, ".xlsx", "financial_report",
+                        "financial_report")
                     r = get(full_url[0])
                     if r.status_code == 200:
                         os.makedirs(ticker_folder, exist_ok=True)
@@ -128,24 +134,37 @@ def get_files_url(cik, accession_numbers, ext, if_1, if_2):
     for accession_number in accession_numbers:
         accession_number_url = os.path.join(
             BASE_EDGAR_URL, cik, accession_number).replace("\\", "/")
-        r = get(accession_number_url)
-        if r.status_code == 200:
-            data = r.text
-            soup = BeautifulSoup(data, features="lxml")
-            links = [link.get("href") for link in soup.findAll("a")]
-            urls = [link for link in links if (link.split(".")[-1] == ext and (
-                if_1 in link or if_2 in link))
-            ]
-            urls = [url for url in urls if accession_number in url]
-            # TODO
-            # Find a better method to pick the correct file (can't get cik V)
-            if urls:
-                fname = os.path.basename(urls[0])
+        print("accession_number_url: ", accession_number_url)
+        with get(accession_number_url) as r:
+            if r.status_code == 200:
+                data = r.text
+                soup = BeautifulSoup(data, features="lxml")
+                links = [link.get("href") for link in soup.findAll("a")]
+                print("links: ", links)
+                print("ext :", ext)
+                corresponding_file_extension = [link for link in links if (
+                    os.path.splitext(link)[-1] == ext)]
+                print(corresponding_file_extension)
+                urls = [link for link in corresponding_file_extension if (
+                    if_1 in link.lower() or if_2 in link.lower())]
+                print("urls: ", urls)
+                urls_accession_num = [
+                    url for url in urls if accession_number in url]
+                # TODO
+                # Find better method to pick the correct file (can't get cik V)
+                if urls_accession_num == []:
+                    # Get first htm url with accession_number
+                    urls_accession_num = [link for link in links if (
+                        os.path.splitext(link)[
+                            -1] == ext and accession_number in link)]
+                    print("urls_accession_num :", urls_accession_num)
+                fname = os.path.basename(urls_accession_num[0])
                 url = os.path.join(accession_number_url, fname).replace(
                     "\\", "/")
                 return_urls.append(url)
+                # return_urls.append("check_amended")
             else:
-                return_urls.append("check_amended")
+                print("Error when request:", r.status_code)
     return return_urls
 
 
@@ -154,12 +173,17 @@ def get_cik(tickers):
     "=exclude&action=getcompany"
     CIK_RE = re.compile(r".*CIK=(\d{10}).*")
 
+    failed_finding_ticker = []
     cik_dict = {}
     for ticker in tqdm(tickers):
         f = get(URL.format(ticker), stream=True)
         results = CIK_RE.findall(f.text)
         if len(results):
             cik_dict[str(ticker).lower()] = str(results[0])
+        else:
+            failed_finding_ticker.append(ticker)
+
+    print("Failed finding tickers:", failed_finding_ticker)
     return cik_dict
 
 
@@ -366,10 +390,11 @@ def remove_temp_files(fname_per_type_per_year_per_ticker):
 
 def download_and_parse(tickers, dl_folder_fpath):
 
-    # diff_df = read_csv("diff.csv")
+    # diff_df = pd.read_csv("diff.csv")
+    # diff_df["market_cap"] = diff_df["y_true"] * diff_df["current_volume"]
+    # diff_df = diff_df.sort_values("market_cap", ascending=False)
     # diff_df = diff_df.dropna(subset=['Company'])
-    # tickers = diff_df["Company"].values[:1]
-    # tickers = ["WFC"]
+    # tickers = diff_df["Company"].values[:1000]
 
     os.makedirs(dl_folder_fpath, exist_ok=True)
     print("Parsing the last 5 10K documents from tickers:",
@@ -396,7 +421,7 @@ def parse_args():
     # Parse command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--tickers", nargs="+")
-    parser.add_argument("--dl_folder_fpath", type=str)
+    parser.add_argument("--dl_folder_fpath", default="default_dl", type=str)
     args = parser.parse_args()
 
     return args

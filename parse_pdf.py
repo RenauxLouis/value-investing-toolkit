@@ -56,16 +56,14 @@ def regex_per_word(match, list_r):
 def get_tables_from_pdf_file(fpath, n_pages):
 
     tables = []
-    # for n_page in tqdm(range(1, n_pages+1)):
-    #     try:
-    #         tables.extend(read_pdf(
-    #             fpath, pages=n_page, multiple_tables=True))
-    #     except subprocess.CalledProcessError:
-    #         continue
-    tables.extend(read_pdf(fpath, pages=34,
-                           multiple_tables=True, lattice=True))
-    print(tables)
-    print(pd.concat(tables))
+    for n_page in tqdm(range(1, n_pages+1)):
+        try:
+            tables.extend(read_pdf(
+                fpath, pages=n_page, multiple_tables=True))
+        except subprocess.CalledProcessError:
+            continue
+    # print(tables)
+    # print(pd.concat(tables))
     map_target_table = defaultdict(list)
     for i, table in enumerate(tables):
         columns = table.columns
@@ -86,8 +84,7 @@ def main(input_folder):
     for fname in tqdm(pdf_fnames):
         fpath = os.path.join(input_folder, fname)
         year = fpath.split(".")[-2][-4:]
-        print(year)
-        reader = PdfFileReader(open(fpath, mode="rb"))
+        reader = PdfFileReader(fpath)
         n_pages = reader.getNumPages()
         map_target_table = get_tables_from_pdf_file(fpath, n_pages)
         map_target_table_per_year[year] = map_target_table

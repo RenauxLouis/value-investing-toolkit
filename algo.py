@@ -1,13 +1,14 @@
 # Make sure that you have all these libaries available to run the code successfully
-from pandas_datareader import data
-import matplotlib.pyplot as plt
-import pandas as pd
 import datetime as dt
-import urllib.request
 import json
 import os
+import urllib.request
+
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import tensorflow as tf  # This code has been tested with TensorFlow 1.6
+from pandas_datareader import data
 from sklearn.preprocessing import MinMaxScaler
 
 API_KEY = "I1QK2YJLYH295D4I"
