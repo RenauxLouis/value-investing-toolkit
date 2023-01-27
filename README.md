@@ -6,3 +6,4 @@ To grab all relevant data from a given company run
 ```
 python3 download_10k.py --tickers AAPL MSFT --dl_folder_fpath "folder"
 ```
+which will pull the 10K files from the past 5 years and save them as Excel files locally in the given folder
